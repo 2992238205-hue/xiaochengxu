@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101318">
+  <title>英语小说阅读 MVP</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="top-nav">
+      <div class="brand">
+        <h1>英语小说阅读</h1>
+        <p>最小 MVP 验证版</p>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button data-view="shelf" class="tab-button active">书架</button>
+      <button data-view="reader" class="tab-button">阅读</button>
+      <button data-view="profile" class="tab-button">我的</button>
+    </nav>
+
+    <main class="view-stack">
+      <section id="shelf-view" class="view active">
+        <div class="card" id="import-card">
+          <h2>导入小说</h2>
+          <p class="hint">支持 `.json` 与 `.md`（Markdown 章节识别模式）。</p>
+          <input id="book-import" type="file" accept=".json,.md,.markdown,text/markdown,application/json">
+          <details class="format-details">
+            <summary>查看 JSON 格式示例</summary>
+            <pre>{
+  "id": "book-001",
+  "title": "My Novel",
+  "wordGoal": 3500,
+  "chapters": [
+    {
+      "title": "Chapter 1",
+      "english": "English text...",
+      "chinese": "中文文本...",
+      "targetWords": [
+        {"word": "focus", "translation": "专注"}
+      ]
+    }
+  ]
+}</pre>
+          </details>
+        </div>
+        <div class="card">
+          <h2>我的书架</h2>
+          <div id="bookshelf-list" class="book-grid"></div>
+        </div>
+      </section>
+
+      <section id="reader-view" class="view reader-view">
+        <div id="reader-stage" class="reader-stage ui-hidden">
+          <div class="reader-top-bar reader-ui-layer">
+            <button id="reader-back" class="ghost-button">返回书架</button>
+            <div class="reader-title-block">
+              <h2 id="reader-book-title">未选择小说</h2>
+              <p id="reader-chapter-title" class="hint">请选择一本书开始阅读</p>
+            </div>
+            <button id="focus-mode-button" class="ghost-button">专注模式</button>
+          </div>
+
+          <div id="reading-panel" class="reading-panel" aria-live="polite"></div>
+
+          <div id="translation-card" class="translation-card hidden reader-ui-layer">
+            <div>
+              <strong id="translation-word"></strong>
+              <p id="translation-meaning"></p>
+            </div>
+            <button id="speak-word" class="ghost-button">发音</button>
+          </div>
+
+          <div id="reader-bottom-sheet" class="reader-bottom-sheet reader-ui-layer">
+            <div class="reader-head-inline">
+              <select id="chapter-select" aria-label="章节选择"></select>
+              <span id="page-indicator">0 / 0</span>
+            </div>
+
+            <div class="reader-controls">
+              <label>字体
+                <input id="font-size" type="range" min="16" max="30" value="20">
+              </label>
+              <label>
+                行距
+                <input id="line-height" type="range" min="1.4" max="2.2" step="0.1" value="1.7">
+              </label>
+              <label class="inline-switch">
+                <input id="show-chinese" type="checkbox">
+                显示中文对照
+              </label>
+            </div>
+
+            <div id="chinese-panel" class="chinese-panel hidden"></div>
+
+            <div class="pager">
+              <button id="prev-page">上一页</button>
+              <button id="next-page">下一页</button>
+            </div>
+
+            <div class="chapter-nav">
+              <button id="prev-chapter">上一章</button>
+              <button id="next-chapter">下一章</button>
+            </div>
+
+            <div class="chapter-gate">
+              <p id="gate-status">前 30 章需单词过关后解锁下一章。</p>
+              <button id="start-quiz" class="primary-button">本章单词过关</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="profile-view" class="view">
+        <div class="card">
+          <h2>学习信息</h2>
+          <form id="profile-form" class="profile-form">
+            <label>年龄
+              <input id="profile-age" type="number" min="7" max="99">
+            </label>
+            <label>阶段
+              <select id="profile-stage">
+                <option value="初中">初中</option>
+                <option value="高中">高中</option>
+                <option value="大学">大学</option>
+              </select>
+            </label>
+            <label>选课方向
+              <input id="profile-track" type="text" placeholder="如：理科/文科/综合">
+            </label>
+            <button type="submit" class="primary-button">保存</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>词汇掌握进度</h2>
+          <p id="progress-label">0 / 3500</p>
+          <div class="progress-bar">
+            <div id="progress-fill"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="quiz-dialog">
+    <form id="quiz-form" method="dialog">
+      <h3>章节单词过关</h3>
+      <p id="quiz-subtitle"></p>
+      <div id="quiz-questions"></div>
+      <div class="dialog-actions">
+        <button value="cancel" type="button" id="cancel-quiz">取消</button>
+        <button value="submit" type="submit" class="primary-button">提交</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="focus-dialog">
+    <h3>iPhone 锁机建议（引导式访问）</h3>
+    <ol>
+      <li>打开 iPhone「设置 > 辅助功能 > 引导式访问」并启用。</li>
+      <li>将密码设置好，回到本 App 页面。</li>
+      <li>三击侧边键，选择引导式访问开始，即可限制离开当前页面。</li>
+      <li>结束时再次三击侧边键并输入密码。</li>
+    </ol>
+    <div class="dialog-actions">
+      <button id="close-focus-dialog">知道了</button>
+    </div>
+  </dialog>
+
+  <dialog id="comment-input-dialog" class="comment-dialog">
+    <form id="comment-input-form" method="dialog">
+      <h3>添加评论</h3>
+      <p id="comment-anchor-preview" class="hint"></p>
+      <textarea id="comment-text" rows="4" maxlength="200" placeholder="输入评论内容（最多200字）" required></textarea>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-comment-input">取消</button>
+        <button type="submit" class="primary-button">发布</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="comment-list-dialog" class="comment-list-dialog">
+    <div class="comment-sheet">
+      <div class="comment-sheet-head">
+        <h3 id="comment-list-title">全部评论</h3>
+        <button id="close-comment-list" class="ghost-button">关闭</button>
+      </div>
+      <p id="comment-list-anchor" class="hint"></p>
+      <div id="comment-list-body" class="comment-list-body"></div>
+      <div class="dialog-actions">
+        <button id="add-comment-from-list" class="primary-button">我也说一句</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="./config.js"></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>

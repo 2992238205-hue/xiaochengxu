@@ -1,0 +1,4 @@
+.venv/
+backend/books.db
+__pycache__/
+*.pyc

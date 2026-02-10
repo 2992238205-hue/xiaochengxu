@@ -1,0 +1,59 @@
+{
+  "id": "deep-focus-journey",
+  "title": "Deep Focus Journey",
+  "description": "双语成长小说示例（MVP）",
+  "wordGoal": 3500,
+  "chapters": [
+    {
+      "title": "Chapter 1: The Silent Rule",
+      "english": "When Lin opened the old notebook, he found only one sentence on the first page: \"Protect your attention.\" He did not understand it at first. In school, everyone was busy, and every minute was broken by noise. Messages, games, and random videos competed for his mind.\n\nThat night, he tested a small rule. He put the phone in another room, set a timer for thirty minutes, and read one English page without interruption. It felt difficult in the first five minutes, but then a calm rhythm appeared.\n\nFor the first time in months, he remembered what he read. He underlined words, spoke them aloud, and wrote a short summary in simple English. He slept with a clear head and woke up earlier than usual.\n\nThe next morning, he decided this would not be a one-day trick. It would be a system. If he could protect attention every day, maybe he could rebuild confidence step by step.",
+      "chinese": "林翻开旧笔记本，第一页只有一句话：“保护你的注意力。” 一开始他并不懂。学校里每个人都很忙，每一分钟都被噪音切碎，消息、游戏和短视频不断抢夺他的心智。\n\n那天晚上，他做了一个小测试：把手机放到另一个房间，定30分钟计时，不被打断地读一页英文。前五分钟很难，但很快进入了平静节奏。\n\n几个月以来第一次，他真正记住了读过的内容。他划出单词，大声朗读，并用简单英文写总结。那晚他头脑清晰，第二天也起得更早。\n\n第二天早上，他决定这不是一天的技巧，而是一套系统。如果每天都能守住注意力，也许就能一步步重建自信。",
+      "targetWords": [
+        { "word": "attention", "translation": "注意力" },
+        { "word": "protect", "translation": "保护" },
+        { "word": "interruption", "translation": "打断" },
+        { "word": "rhythm", "translation": "节奏" },
+        { "word": "underline", "translation": "划线标注" },
+        { "word": "summary", "translation": "总结" },
+        { "word": "confidence", "translation": "自信" },
+        { "word": "system", "translation": "系统" },
+        { "word": "minute", "translation": "分钟" },
+        { "word": "clear", "translation": "清晰的" }
+      ]
+    },
+    {
+      "title": "Chapter 2: Memory Is Built",
+      "english": "On day three, Lin met his friend Yu in the library. Yu asked, \"How can you remember new words so fast?\" Lin answered, \"I do not force memory. I build memory with structure.\"\n\nHe showed a simple method: each new word had a scene, a sentence, and a sound. First, he imagined a picture. Second, he wrote a sentence connected to his own life. Third, he read the word aloud three times with correct stress.\n\nAt the end of the session, he closed the book and tested himself. If he could use the word in a new sentence, it stayed. If not, he marked it for the next day. No drama, no guilt, only feedback.\n\nYu smiled and said this looked like training, not luck. Lin nodded. He finally understood that progress was not mysterious. Progress was measurable practice repeated with patience.",
+      "chinese": "第三天，林在图书馆遇到朋友宇。宇问：“你怎么这么快记住新单词？” 林回答：“我不是硬背，我是用结构搭建记忆。”\n\n他展示了一个简单方法：每个新词都配“场景、句子、发音”。先想象画面，再写和自己生活有关的句子，最后按正确重音朗读三遍。\n\n学习结束后，他会合上书自测。能用新句子造句，就算掌握；不能，就标记到第二天。没有情绪化，也没有内疚，只有反馈。\n\n宇笑着说，这像训练而不是运气。林点头。他终于明白，进步并不神秘，进步是可测量的耐心练习。",
+      "targetWords": [
+        { "word": "structure", "translation": "结构" },
+        { "word": "scene", "translation": "场景" },
+        { "word": "stress", "translation": "重音" },
+        { "word": "session", "translation": "学习时段" },
+        { "word": "feedback", "translation": "反馈" },
+        { "word": "measurable", "translation": "可测量的" },
+        { "word": "patience", "translation": "耐心" },
+        { "word": "training", "translation": "训练" },
+        { "word": "method", "translation": "方法" },
+        { "word": "memory", "translation": "记忆" }
+      ]
+    },
+    {
+      "title": "Chapter 3: The First Breakthrough",
+      "english": "Two weeks later, Lin reviewed his records. He had finished all planned reading sessions, and his error rate in quizzes had dropped by half. The numbers were small, but they were real.\n\nHis teacher noticed a change in class. Lin was no longer silent when difficult texts appeared. He asked precise questions, explained his reasoning, and corrected mistakes quickly.\n\nThat evening, Lin wrote in his notebook: \"Breakthrough is not one giant moment. It is many honest days connected together.\" He understood that deep thinking started from disciplined attention.\n\nHe closed the notebook and looked out of the window. The road ahead was still long, but now it was visible. For the first time, he trusted the path.",
+      "chinese": "两周后，林复盘了自己的记录。他完成了全部计划阅读，测验错误率下降了一半。数字看起来不大，但非常真实。\n\n老师在课堂上也看到了变化。遇到难文时，林不再沉默。他会提出精准问题，解释自己的推理，并快速修正错误。\n\n那天晚上，林在笔记本写下：“突破不是某个巨大瞬间，而是许多个诚实的日子连接起来。” 他明白了，深度思考从有纪律的注意力开始。\n\n他合上笔记本望向窗外。前路依然很长，但已经看得见。第一次，他真正相信这条路。",
+      "targetWords": [
+        { "word": "review", "translation": "复盘" },
+        { "word": "records", "translation": "记录" },
+        { "word": "error", "translation": "错误" },
+        { "word": "precise", "translation": "精准的" },
+        { "word": "reasoning", "translation": "推理" },
+        { "word": "disciplined", "translation": "有纪律的" },
+        { "word": "visible", "translation": "可见的" },
+        { "word": "path", "translation": "路径" },
+        { "word": "breakthrough", "translation": "突破" },
+        { "word": "trusted", "translation": "信任" }
+      ]
+    }
+  ]
+}

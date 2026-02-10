@@ -1,0 +1,16 @@
+{
+  "miniprogramRoot": "./",
+  "projectname": "english-reader-mini",
+  "description": "WebView wrapper for English Reader",
+  "appid": "touristappid",
+  "setting": {
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmManually": false,
+    "packNpmRelationList": []
+  },
+  "compileType": "miniprogram"
+}

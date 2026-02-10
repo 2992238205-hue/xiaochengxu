@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "英语小说阅读",
+    "navigationBarBackgroundColor": "#101318",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#101318",
+    "backgroundTextStyle": "light"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
