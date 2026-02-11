@@ -11,7 +11,7 @@
     h1 { margin: 0 0 14px; font-size: 1.25rem; }
     h2 { margin: 0 0 10px; font-size: 1.05rem; }
     label { display: block; margin-bottom: 10px; font-size: .9rem; color: #334562; }
-    input, textarea, button { font: inherit; }
+    input, textarea, button, select { font: inherit; }
     input[type="text"], input[type="password"], textarea { width: 100%; border: 1px solid #cad6ea; border-radius: 10px; padding: 9px 10px; box-sizing: border-box; background: #fff; }
     textarea { min-height: 150px; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -20,7 +20,19 @@
     .log { white-space: pre-wrap; background: #0e1726; color: #d0f2ff; border-radius: 10px; padding: 10px; min-height: 80px; font-size: .84rem; }
     .book-item { border: 1px solid #d8e3f4; border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #fbfdff; }
     .book-item strong { display: inline-block; margin-bottom: 4px; }
+    .book-toolbar { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .book-toolbar button { padding: 6px 10px; border-radius: 8px; border: 1px solid #c7d5ee; background: #fff; color: #2b3e61; }
+    .book-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: start; margin-top: 8px; }
+    .book-cover { width: 120px; height: 160px; border-radius: 8px; border: 1px solid #d8e3f4; object-fit: cover; background: #edf2fb; }
+    .book-meta { display: grid; gap: 8px; }
+    .book-meta input { width: 100%; }
+    .danger { border-color: #e77888 !important; color: #b42336 !important; }
+    .book-batch-toolbar { display: grid; grid-template-columns: 1.4fr auto auto auto auto; gap: 8px; align-items: center; margin: 10px 0 12px; }
+    .book-batch-toolbar input[type="password"] { width: 100%; border: 1px solid #cad6ea; border-radius: 8px; padding: 8px 9px; }
+    .book-batch-toolbar button { padding: 8px 10px; border-radius: 8px; border: 1px solid #c7d5ee; background: #fff; color: #2b3e61; }
+    .pick-book { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.85rem; color: #425675; }
     @media (max-width: 760px) { .row { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) { .book-batch-toolbar { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 <body>
@@ -48,6 +60,14 @@
             <input id="book-title" type="text" placeholder="例如 深度觉醒">
           </label>
         </div>
+        <div class="row">
+          <label>封面图片链接（可选）
+            <input id="book-cover-url" type="text" placeholder="https://...jpg/png">
+          </label>
+          <label>分类（可选）
+            <input id="book-category" type="text" placeholder="例如 高中 / 科幻 / 心智成长">
+          </label>
+        </div>
         <label>章节闯关任务（可选，手动配置）</label>
         <textarea id="tasks-text" placeholder="推荐格式（不需要自己填中文）：&#10;### 1章单词表&#10;focus, logic, memory&#10;&#10;### 2章单词表&#10;purpose, feature, system&#10;&#10;也兼容旧格式：&#10;1|focus|专注"></textarea>
         <p class="hint">不配置就没有任务；只配置某几章，就只有这些章节有闯关任务。</p>
@@ -63,6 +83,13 @@
     <div class="card">
       <h2>当前书架（服务端）</h2>
       <button id="refresh-books" class="btn" type="button">刷新列表</button>
+      <div class="book-batch-toolbar">
+        <input id="confirm-admin-key" type="password" placeholder="删除确认：再次输入管理员密钥">
+        <button id="select-all-books" type="button">全选</button>
+        <button id="clear-selected-books" type="button">清空选择</button>
+        <button id="batch-delete-books" class="danger" type="button">批量删除</button>
+        <span id="selected-books-count" class="hint">已选 0 本</span>
+      </div>
       <div id="book-list" style="margin-top:10px;"></div>
     </div>
   </div>
@@ -75,10 +102,53 @@
     const refreshButton = document.getElementById("refresh-books");
     const adminKeyInput = document.getElementById("admin-key");
     const keyStatus = document.getElementById("key-status");
+    const confirmAdminKeyInput = document.getElementById("confirm-admin-key");
+    const selectAllBooksButton = document.getElementById("select-all-books");
+    const clearSelectedBooksButton = document.getElementById("clear-selected-books");
+    const batchDeleteBooksButton = document.getElementById("batch-delete-books");
+    const selectedBooksCount = document.getElementById("selected-books-count");
+    let currentBooks = [];
+    const selectedBookIds = new Set();
 
     function log(message) {
       const time = new Date().toLocaleString();
       logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function adminHeaders(overrideKey = "") {
+      const key = String(overrideKey || adminKeyInput.value).trim();
+      return key ? { "X-Admin-Key": key } : {};
+    }
+
+    function updateSelectedBooksCount() {
+      selectedBooksCount.textContent = `已选 ${selectedBookIds.size} 本`;
+    }
+
+    async function verifyAdminKey(key) {
+      const cleanKey = String(key || "").trim();
+      if (!cleanKey) {
+        throw new Error("请先输入删除确认密码");
+      }
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: adminHeaders(cleanKey)
+      });
+      if (!res.ok) {
+        throw new Error("确认密码错误");
+      }
+      adminKeyInput.value = cleanKey;
+      localStorage.setItem(KEY_STORAGE_KEY, cleanKey);
+      keyStatus.textContent = "管理员密钥校验成功。";
+      return cleanKey;
     }
 
     async function prefillAdminKey() {
@@ -121,21 +191,51 @@
         }
         const data = await res.json();
         const books = Array.isArray(data.books) ? data.books : [];
+        currentBooks = books;
+        const currentIdSet = new Set(books.map((book) => String(book.id)));
+        [...selectedBookIds].forEach((bookId) => {
+          if (!currentIdSet.has(bookId)) {
+            selectedBookIds.delete(bookId);
+          }
+        });
         if (books.length === 0) {
           bookList.innerHTML = "<p class='hint'>当前还没有书。</p>";
+          updateSelectedBooksCount();
           return;
         }
-        bookList.innerHTML = books.map((book) => {
+        bookList.innerHTML = books.map((book, index) => {
+          const cover = String(book.coverUrl || "").trim();
+          const checked = selectedBookIds.has(String(book.id)) ? "checked" : "";
+          const coverNode = cover
+            ? `<img class="book-cover" src="${escapeHtml(cover)}" alt="封面">`
+            : `<div class="book-cover" style="display:flex;align-items:center;justify-content:center;color:#5d6c84;">无封面</div>`;
           return `
-            <article class="book-item">
-              <strong>${book.title || "未命名"}</strong><br>
-              <span class="hint">ID: ${book.id}</span><br>
-              <span class="hint">章节数: ${(book.chapters || []).length}</span>
+            <article class="book-item" data-book-id="${escapeHtml(book.id)}">
+              <strong>${escapeHtml(book.title || "未命名")}</strong><br>
+              <span class="hint">ID: ${escapeHtml(book.id)}</span><br>
+              <span class="hint">章节数: ${(book.chapters || []).length} ｜ 排序: ${index + 1}</span>
+              <div class="book-row">
+                ${coverNode}
+                <div class="book-meta">
+                  <input data-field="title" type="text" value="${escapeHtml(book.title || "")}" placeholder="书名">
+                  <input data-field="category" type="text" value="${escapeHtml(book.category || "")}" placeholder="分类">
+                  <input data-field="coverUrl" type="text" value="${escapeHtml(book.coverUrl || "")}" placeholder="封面链接 https://...">
+                </div>
+              </div>
+              <label class="pick-book"><input class="book-select" data-book-id="${escapeHtml(book.id)}" type="checkbox" ${checked}> 选中此书</label>
+              <div class="book-toolbar">
+                <button type="button" data-action="save">保存修改</button>
+                <button type="button" data-action="up">上移</button>
+                <button type="button" data-action="down">下移</button>
+                <button type="button" class="danger" data-action="delete">删除</button>
+              </div>
             </article>
           `;
         }).join("");
+        updateSelectedBooksCount();
       } catch (error) {
         bookList.innerHTML = `<p class='hint'>${error.message}</p>`;
+        updateSelectedBooksCount();
       }
     }
 
@@ -155,6 +255,8 @@
       }
       const bookId = document.getElementById("book-id").value.trim();
       const bookTitle = document.getElementById("book-title").value.trim();
+      const bookCoverUrl = document.getElementById("book-cover-url").value.trim();
+      const bookCategory = document.getElementById("book-category").value.trim();
       const tasksText = document.getElementById("tasks-text").value;
 
       const formData = new FormData();
@@ -162,6 +264,8 @@
       formData.append("tasks_text", tasksText);
       if (bookId) formData.append("book_id", bookId);
       if (bookTitle) formData.append("book_title", bookTitle);
+      if (bookCoverUrl) formData.append("book_cover_url", bookCoverUrl);
+      if (bookCategory) formData.append("book_category", bookCategory);
 
       try {
         const res = await fetch("/api/admin/books/upload", {
@@ -187,6 +291,166 @@
 
     prefillAdminKey();
     refreshBooks();
+
+    async function saveBook(bookId, payload) {
+      const res = await fetch(`/api/admin/books/${encodeURIComponent(bookId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...adminHeaders()
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "保存失败");
+      }
+    }
+
+    async function deleteBook(bookId, overrideKey = "") {
+      const res = await fetch(`/api/admin/books/${encodeURIComponent(bookId)}`, {
+        method: "DELETE",
+        headers: adminHeaders(overrideKey)
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "删除失败");
+      }
+    }
+
+    async function reorderBooks(orderedIds) {
+      const res = await fetch("/api/admin/books/reorder", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...adminHeaders()
+        },
+        body: JSON.stringify({ orderedIds })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "排序失败");
+      }
+    }
+
+    async function getDeleteConfirmKey() {
+      const key = confirmAdminKeyInput.value.trim();
+      await verifyAdminKey(key);
+      return key;
+    }
+
+    selectAllBooksButton.addEventListener("click", () => {
+      currentBooks.forEach((book) => selectedBookIds.add(String(book.id)));
+      bookList.querySelectorAll(".book-select").forEach((node) => {
+        node.checked = true;
+      });
+      updateSelectedBooksCount();
+    });
+
+    clearSelectedBooksButton.addEventListener("click", () => {
+      selectedBookIds.clear();
+      bookList.querySelectorAll(".book-select").forEach((node) => {
+        node.checked = false;
+      });
+      updateSelectedBooksCount();
+    });
+
+    batchDeleteBooksButton.addEventListener("click", async () => {
+      const ids = [...selectedBookIds];
+      if (ids.length === 0) {
+        alert("请先勾选要删除的书");
+        return;
+      }
+      if (!confirm(`确认批量删除 ${ids.length} 本书？删除后读者书架会同步消失。`)) {
+        return;
+      }
+      try {
+        const confirmKey = await getDeleteConfirmKey();
+        let success = 0;
+        const failed = [];
+        for (const id of ids) {
+          try {
+            await deleteBook(id, confirmKey);
+            selectedBookIds.delete(id);
+            success += 1;
+          } catch (error) {
+            failed.push(`${id}(${error.message})`);
+          }
+        }
+        log(`批量删除完成：成功 ${success} 本，失败 ${failed.length} 本`);
+        if (failed.length) {
+          log(`失败明细：${failed.join("；")}`);
+        }
+        refreshBooks();
+      } catch (error) {
+        log(`批量删除失败：${error.message}`);
+      }
+    });
+
+    bookList.addEventListener("change", (event) => {
+      const checkbox = event.target.closest(".book-select");
+      if (!checkbox) return;
+      const bookId = String(checkbox.dataset.bookId || "");
+      if (!bookId) return;
+      if (checkbox.checked) {
+        selectedBookIds.add(bookId);
+      } else {
+        selectedBookIds.delete(bookId);
+      }
+      updateSelectedBooksCount();
+    });
+
+    bookList.addEventListener("click", async (event) => {
+      const btn = event.target.closest("button[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const item = btn.closest(".book-item");
+      if (!item) return;
+      const bookId = item.dataset.bookId;
+      if (!bookId) return;
+
+      try {
+        if (action === "save") {
+          const title = item.querySelector('input[data-field="title"]').value.trim();
+          const category = item.querySelector('input[data-field="category"]').value.trim();
+          const coverUrl = item.querySelector('input[data-field="coverUrl"]').value.trim();
+          if (!title) {
+            alert("书名不能为空");
+            return;
+          }
+          await saveBook(bookId, { title, category, coverUrl });
+          log(`保存成功：${title}`);
+          refreshBooks();
+          return;
+        }
+
+        if (action === "delete") {
+          if (!confirm("确认删除这本书？删除后读者书架会同步消失。")) {
+            return;
+          }
+          const confirmKey = await getDeleteConfirmKey();
+          await deleteBook(bookId, confirmKey);
+          selectedBookIds.delete(bookId);
+          log(`删除成功：${bookId}`);
+          refreshBooks();
+          return;
+        }
+
+        if (action === "up" || action === "down") {
+          const ids = currentBooks.map((book) => book.id);
+          const index = ids.indexOf(bookId);
+          if (index < 0) return;
+          const target = action === "up" ? index - 1 : index + 1;
+          if (target < 0 || target >= ids.length) return;
+          [ids[index], ids[target]] = [ids[target], ids[index]];
+          await reorderBooks(ids);
+          log(`排序已更新：${bookId}`);
+          refreshBooks();
+        }
+      } catch (error) {
+        log(`${action}失败：${error.message}`);
+      }
+    });
   </script>
 </body>
 </html>

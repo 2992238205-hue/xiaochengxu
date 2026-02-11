@@ -9,7 +9,30 @@ from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory
+
+try:
+    from backend.novel_agents import (
+        MoonshotClient,
+        NovelAgentOrchestrator,
+        STUDENT_PROFILE_TEMPLATE,
+        build_orchestrator_from_env,
+        chunk_text,
+        now_iso,
+        normalize_student_profile,
+        select_knowledge,
+    )
+except Exception:
+    from novel_agents import (
+        MoonshotClient,
+        NovelAgentOrchestrator,
+        STUDENT_PROFILE_TEMPLATE,
+        build_orchestrator_from_env,
+        chunk_text,
+        normalize_student_profile,
+        now_iso,
+        select_knowledge,
+    )
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -50,7 +73,10 @@ def init_db():
               title TEXT NOT NULL,
               description TEXT NOT NULL,
               word_goal INTEGER NOT NULL DEFAULT 3500,
-              updated_at TEXT NOT NULL
+              updated_at TEXT NOT NULL,
+              cover_url TEXT NOT NULL DEFAULT '',
+              category TEXT NOT NULL DEFAULT '',
+              sort_order INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -65,6 +91,77 @@ def init_db():
               target_words_json TEXT NOT NULL DEFAULT '[]',
               PRIMARY KEY (book_id, chapter_index),
               FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+
+def ensure_book_columns():
+    required_columns = {
+        "cover_url": "TEXT NOT NULL DEFAULT ''",
+        "category": "TEXT NOT NULL DEFAULT ''",
+        "sort_order": "INTEGER NOT NULL DEFAULT 0",
+    }
+    with db_conn() as conn:
+        rows = conn.execute("PRAGMA table_info(books)").fetchall()
+        existing = {row["name"] for row in rows}
+        for col, ddl in required_columns.items():
+            if col in existing:
+                continue
+            conn.execute(f"ALTER TABLE books ADD COLUMN {col} {ddl}")
+
+
+def init_novel_tables():
+    with db_conn() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS novel_knowledge (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              content TEXT NOT NULL,
+              tags TEXT NOT NULL DEFAULT '',
+              source TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS novel_chapter_outputs (
+              id TEXT PRIMARY KEY,
+              project_name TEXT NOT NULL,
+              chapter_index INTEGER NOT NULL,
+              total_chapters INTEGER NOT NULL,
+              chapter_title TEXT NOT NULL,
+              chapter_summary TEXT NOT NULL,
+              chapter_text TEXT NOT NULL,
+              hero_stage INTEGER NOT NULL DEFAULT 1,
+              ai_capability_level INTEGER NOT NULL DEFAULT 1,
+              energy_gain INTEGER NOT NULL DEFAULT 0,
+              energy_after INTEGER NOT NULL DEFAULT 0,
+              quality_score INTEGER NOT NULL DEFAULT 0,
+              quality_passed INTEGER NOT NULL DEFAULT 0,
+              knowledge_ids_json TEXT NOT NULL DEFAULT '[]',
+              agent_trace_json TEXT NOT NULL DEFAULT '{}',
+              created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_novel_chapter_outputs_project
+            ON novel_chapter_outputs(project_name, chapter_index DESC, created_at DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS novel_project_states (
+              project_name TEXT PRIMARY KEY,
+              state_json TEXT NOT NULL DEFAULT '{}',
+              student_profile_json TEXT NOT NULL DEFAULT '{}',
+              routing_json TEXT NOT NULL DEFAULT '{}',
+              updated_at TEXT NOT NULL
             )
             """
         )
@@ -332,6 +429,9 @@ def normalize_book(raw_book):
         "title": normalize_text(raw_book.get("title")) or "未命名小说",
         "description": normalize_text(raw_book.get("description")) or "后台上传书籍",
         "wordGoal": int(raw_book.get("wordGoal") or 3500),
+        "coverUrl": normalize_text(raw_book.get("coverUrl")),
+        "category": normalize_text(raw_book.get("category")),
+        "sortOrder": int(raw_book.get("sortOrder") or 0),
         "chapters": chapters,
     }
 
@@ -516,15 +616,27 @@ def save_book(book):
     with db_conn() as conn:
         conn.execute(
             """
-            INSERT INTO books (id, title, description, word_goal, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO books (id, title, description, word_goal, updated_at, cover_url, category, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               title=excluded.title,
               description=excluded.description,
               word_goal=excluded.word_goal,
-              updated_at=excluded.updated_at
+              updated_at=excluded.updated_at,
+              cover_url=excluded.cover_url,
+              category=excluded.category,
+              sort_order=excluded.sort_order
             """,
-            (book["id"], book["title"], book["description"], int(book["wordGoal"]), now),
+            (
+                book["id"],
+                book["title"],
+                book["description"],
+                int(book["wordGoal"]),
+                now,
+                normalize_text(book.get("coverUrl")),
+                normalize_text(book.get("category")),
+                int(book.get("sortOrder") or 0),
+            ),
         )
         conn.execute("DELETE FROM chapters WHERE book_id = ?", (book["id"],))
         for idx, chapter in enumerate(book["chapters"]):
@@ -546,7 +658,9 @@ def save_book(book):
 
 def load_books():
     with db_conn() as conn:
-        book_rows = conn.execute("SELECT * FROM books ORDER BY updated_at DESC").fetchall()
+        book_rows = conn.execute(
+            "SELECT * FROM books ORDER BY sort_order ASC, updated_at DESC"
+        ).fetchall()
         books = []
         for row in book_rows:
             chapters_rows = conn.execute(
@@ -573,13 +687,417 @@ def load_books():
                     "title": row["title"],
                     "description": row["description"],
                     "wordGoal": row["word_goal"],
+                    "coverUrl": row["cover_url"] or "",
+                    "category": row["category"] or "",
+                    "sortOrder": int(row["sort_order"] or 0),
                     "chapters": chapters,
                 }
             )
         return books
 
 
+def _to_int(value, default=0, low=None, high=None):
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = int(default)
+    if low is not None:
+        parsed = max(int(low), parsed)
+    if high is not None:
+        parsed = min(int(high), parsed)
+    return parsed
+
+
+def normalize_tags(value):
+    if isinstance(value, list):
+        raw_items = value
+    else:
+        raw_items = re.split(r"[,，;；、\s]+", normalize_text(value))
+    clean = []
+    seen = set()
+    for item in raw_items:
+        tag = normalize_text(item)
+        if not tag:
+            continue
+        lowered = tag.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        clean.append(tag)
+    return ",".join(clean[:20])
+
+
+def list_knowledge(limit=100, query=""):
+    safe_limit = _to_int(limit, default=100, low=1, high=400)
+    normalized_query = normalize_text(query)
+    with db_conn() as conn:
+        if normalized_query:
+            like = f"%{normalized_query}%"
+            rows = conn.execute(
+                """
+                SELECT * FROM novel_knowledge
+                WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (like, like, like, safe_limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM novel_knowledge ORDER BY updated_at DESC LIMIT ?",
+                (safe_limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_knowledge_by_ids(knowledge_ids):
+    clean_ids = [normalize_text(item) for item in (knowledge_ids or []) if normalize_text(item)]
+    if not clean_ids:
+        return []
+    placeholders = ",".join(["?"] * len(clean_ids))
+    with db_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM novel_knowledge WHERE id IN ({placeholders})",
+            tuple(clean_ids),
+        ).fetchall()
+    rows_by_id = {row["id"]: dict(row) for row in rows}
+    return [rows_by_id[item_id] for item_id in clean_ids if item_id in rows_by_id]
+
+
+def create_knowledge(title, content, tags="", source="manual", auto_chunk=True):
+    clean_title = normalize_text(title) or "未命名知识"
+    clean_content = normalize_text(content)
+    if not clean_content:
+        raise ValueError("content is required")
+
+    chunks = chunk_text(clean_content) if auto_chunk else [clean_content]
+    now = now_iso()
+    created_ids = []
+    with db_conn() as conn:
+        for idx, chunk in enumerate(chunks, start=1):
+            item_id = f"know-{uuid.uuid4().hex[:12]}"
+            chunk_title = clean_title if len(chunks) == 1 else f"{clean_title}（分片{idx}）"
+            conn.execute(
+                """
+                INSERT INTO novel_knowledge (id, title, content, tags, source, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item_id,
+                    chunk_title,
+                    chunk,
+                    normalize_tags(tags),
+                    normalize_text(source),
+                    now,
+                    now,
+                ),
+            )
+            created_ids.append(item_id)
+    return created_ids
+
+
+def delete_knowledge(knowledge_id):
+    target = normalize_text(knowledge_id)
+    if not target:
+        return False
+    with db_conn() as conn:
+        row = conn.execute("SELECT id FROM novel_knowledge WHERE id = ?", (target,)).fetchone()
+        if not row:
+            return False
+        conn.execute("DELETE FROM novel_knowledge WHERE id = ?", (target,))
+        return True
+
+
+def parse_student_profile_payload(value):
+    if isinstance(value, dict):
+        return normalize_student_profile(value)
+    if isinstance(value, str):
+        text = normalize_text(value)
+        if not text:
+            return normalize_student_profile({})
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                return normalize_student_profile(parsed)
+        except Exception:
+            return normalize_student_profile({"notes": text})
+    return normalize_student_profile({})
+
+
+def get_project_state(project_name):
+    name = normalize_text(project_name)
+    if not name:
+        return {
+            "state": {},
+            "studentProfile": normalize_student_profile({}),
+            "routingStrategy": {},
+            "updatedAt": "",
+        }
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM novel_project_states WHERE project_name = ?",
+            (name,),
+        ).fetchone()
+    if not row:
+        return {
+            "state": {},
+            "studentProfile": normalize_student_profile({}),
+            "routingStrategy": {},
+            "updatedAt": "",
+        }
+
+    try:
+        state = json.loads(row["state_json"] or "{}")
+    except Exception:
+        state = {}
+    try:
+        student_profile = json.loads(row["student_profile_json"] or "{}")
+    except Exception:
+        student_profile = {}
+    try:
+        routing = json.loads(row["routing_json"] or "{}")
+    except Exception:
+        routing = {}
+    return {
+        "state": state if isinstance(state, dict) else {},
+        "studentProfile": normalize_student_profile(student_profile),
+        "routingStrategy": routing if isinstance(routing, dict) else {},
+        "updatedAt": normalize_text(row["updated_at"]),
+    }
+
+
+def upsert_project_state(project_name, state, student_profile, routing):
+    name = normalize_text(project_name)
+    if not name:
+        return
+    with db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO novel_project_states (project_name, state_json, student_profile_json, routing_json, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(project_name) DO UPDATE SET
+              state_json=excluded.state_json,
+              student_profile_json=excluded.student_profile_json,
+              routing_json=excluded.routing_json,
+              updated_at=excluded.updated_at
+            """,
+            (
+                name,
+                json.dumps(state if isinstance(state, dict) else {}, ensure_ascii=False),
+                json.dumps(student_profile if isinstance(student_profile, dict) else {}, ensure_ascii=False),
+                json.dumps(routing if isinstance(routing, dict) else {}, ensure_ascii=False),
+                now_iso(),
+            ),
+        )
+
+
+def list_project_chapter_context(project_name, limit=40):
+    name = normalize_text(project_name)
+    if not name:
+        return []
+    safe_limit = _to_int(limit, default=40, low=1, high=240)
+    with db_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT chapter_index, chapter_title, chapter_summary, hero_stage, ai_capability_level, energy_after, created_at
+            FROM novel_chapter_outputs
+            WHERE project_name = ?
+            ORDER BY chapter_index DESC, created_at DESC
+            LIMIT ?
+            """,
+            (name, safe_limit),
+        ).fetchall()
+    ordered = []
+    for row in reversed(rows):
+        ordered.append(
+            {
+                "chapter_index": _to_int(row["chapter_index"], default=0, low=0),
+                "chapter_title": normalize_text(row["chapter_title"]),
+                "chapter_summary": normalize_text(row["chapter_summary"]),
+                "hero_stage": _to_int(row["hero_stage"], default=1, low=1, high=10),
+                "ai_capability_level": _to_int(row["ai_capability_level"], default=1, low=1, high=10),
+                "energy_after": _to_int(row["energy_after"], default=0, low=0),
+                "created_at": normalize_text(row["created_at"]),
+            }
+        )
+    return ordered
+
+
+def persist_project_memory_snapshot(project_name, chapter_index, merged_state, student_profile, routing_strategy):
+    name = normalize_text(project_name)
+    if not name:
+        return ""
+    content = json.dumps(
+        {
+            "project": name,
+            "chapter": _to_int(chapter_index, default=1, low=1),
+            "studentProfile": student_profile if isinstance(student_profile, dict) else {},
+            "routingStrategy": routing_strategy if isinstance(routing_strategy, dict) else {},
+            "mergedState": merged_state if isinstance(merged_state, dict) else {},
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+    entry_id = f"know-{uuid.uuid4().hex[:12]}"
+    now = now_iso()
+    with db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO novel_knowledge (id, title, content, tags, source, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry_id,
+                f"{name} 章节{chapter_index} 记忆快照",
+                content,
+                normalize_tags(["project_memory", name, f"chapter_{chapter_index}", "人物关系", "阶段进展"]),
+                "project_memory",
+                now,
+                now,
+            ),
+        )
+    return entry_id
+
+
+def latest_project_energy(project_name):
+    name = normalize_text(project_name)
+    if not name:
+        return 0
+    with db_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT energy_after FROM novel_chapter_outputs
+            WHERE project_name = ?
+            ORDER BY chapter_index DESC, created_at DESC
+            LIMIT 1
+            """,
+            (name,),
+        ).fetchone()
+    if not row:
+        return 0
+    return _to_int(row["energy_after"], default=0, low=0)
+
+
+def save_novel_chapter_result(project_name, chapter_index, total_chapters, result):
+    chapter = result.get("chapter") or {}
+    quality = result.get("quality") or {}
+    knowledge_used = result.get("knowledgeUsed") or []
+    knowledge_ids = [item.get("id") for item in knowledge_used if item.get("id")]
+    entry_id = f"chapter-{uuid.uuid4().hex[:12]}"
+
+    with db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO novel_chapter_outputs (
+              id, project_name, chapter_index, total_chapters, chapter_title, chapter_summary,
+              chapter_text, hero_stage, ai_capability_level, energy_gain, energy_after,
+              quality_score, quality_passed, knowledge_ids_json, agent_trace_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry_id,
+                normalize_text(project_name),
+                _to_int(chapter_index, default=1, low=1),
+                _to_int(total_chapters, default=20, low=1),
+                normalize_text(chapter.get("chapter_title")),
+                normalize_text(chapter.get("chapter_summary")),
+                normalize_text(chapter.get("chapter_text")),
+                _to_int(chapter.get("hero_stage"), default=1, low=1, high=10),
+                _to_int(chapter.get("ai_capability_level"), default=1, low=1, high=10),
+                _to_int(chapter.get("energy_gain"), default=0, low=0),
+                _to_int(chapter.get("energy_after"), default=0, low=0),
+                _to_int(quality.get("score"), default=0, low=0, high=100),
+                1 if bool(quality.get("passed")) else 0,
+                json.dumps(knowledge_ids, ensure_ascii=False),
+                json.dumps(result.get("agents") or {}, ensure_ascii=False),
+                now_iso(),
+            ),
+        )
+    return entry_id
+
+
+def list_project_chapters(project_name, limit=20):
+    name = normalize_text(project_name)
+    safe_limit = _to_int(limit, default=20, low=1, high=200)
+    with db_conn() as conn:
+        if name:
+            rows = conn.execute(
+                """
+                SELECT * FROM novel_chapter_outputs
+                WHERE project_name = ?
+                ORDER BY chapter_index DESC, created_at DESC
+                LIMIT ?
+                """,
+                (name, safe_limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM novel_chapter_outputs
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+    payload = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["knowledge_ids"] = json.loads(item.get("knowledge_ids_json") or "[]")
+        except Exception:
+            item["knowledge_ids"] = []
+        item.pop("agent_trace_json", None)
+        item.pop("knowledge_ids_json", None)
+        payload.append(item)
+    return payload
+
+
+ORCHESTRATOR = build_orchestrator_from_env()
+
+
+def get_request_orchestrator(payload=None):
+    data = payload if isinstance(payload, dict) else {}
+    api_key = normalize_text(request.headers.get("X-Moonshot-Api-Key", "")) or normalize_text(data.get("moonshotApiKey"))
+    if not api_key:
+        return ORCHESTRATOR
+
+    model = normalize_text(request.headers.get("X-Moonshot-Model", "")) or normalize_text(data.get("moonshotModel"))
+    base_url = normalize_text(request.headers.get("X-Moonshot-Base-Url", "")) or normalize_text(data.get("moonshotBaseUrl"))
+    timeout_raw = normalize_text(request.headers.get("X-Moonshot-Timeout", "")) or normalize_text(data.get("moonshotTimeoutSeconds"))
+    try:
+        timeout_seconds = float(timeout_raw) if timeout_raw else float(os.getenv("MOONSHOT_TIMEOUT_SECONDS", "120"))
+    except Exception:
+        timeout_seconds = float(os.getenv("MOONSHOT_TIMEOUT_SECONDS", "120"))
+
+    client = MoonshotClient(
+        api_key=api_key,
+        base_url=base_url or os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.cn/v1"),
+        model=model or os.getenv("MOONSHOT_MODEL", "kimi-k2-0905-preview"),
+        timeout_seconds=timeout_seconds,
+    )
+    return NovelAgentOrchestrator(llm_client=client)
+
+
+def resolve_knowledge_for_generation(payload):
+    manual_ids = payload.get("knowledgeIds")
+    if isinstance(manual_ids, list) and manual_ids:
+        return get_knowledge_by_ids(manual_ids)
+
+    query = normalize_text(payload.get("knowledgeQuery"))
+    if not query:
+        query = normalize_text(payload.get("premise"))
+    project_name = normalize_text(payload.get("projectName"))
+    if project_name:
+        query = f"{query} {project_name} 人物关系 阶段推进 连续性".strip()
+    all_rows = list_knowledge(limit=240, query="")
+    top_k = _to_int(payload.get("knowledgeTopK"), default=6, low=1, high=16)
+    return select_knowledge(all_rows, query=query, top_k=top_k)
+
+
 init_db()
+ensure_book_columns()
+init_novel_tables()
 
 
 @app.get("/api/health")
@@ -617,6 +1135,13 @@ def api_admin_bootstrap():
     if ALLOW_ADMIN_BOOTSTRAP:
         payload["adminKey"] = ADMIN_KEY
     return jsonify(payload)
+
+
+@app.post("/api/admin/verify")
+def api_admin_verify():
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({"ok": True})
 
 
 @app.post("/api/admin/books")
@@ -663,6 +1188,10 @@ def api_admin_upload_file():
             raw_book["id"] = request.form.get("book_id")
         if request.form.get("book_title"):
             raw_book["title"] = request.form.get("book_title")
+        if request.form.get("book_cover_url"):
+            raw_book["coverUrl"] = request.form.get("book_cover_url")
+        if request.form.get("book_category"):
+            raw_book["category"] = request.form.get("book_category")
 
         book = normalize_book(raw_book)
         tasks_text = request.form.get("tasks_text", "")
@@ -683,6 +1212,227 @@ def api_admin_upload_file():
         return jsonify({"error": str(exc)}), 400
 
 
+@app.patch("/api/admin/books/<book_id>")
+def api_admin_update_book(book_id):
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    with db_conn() as conn:
+        row = conn.execute("SELECT * FROM books WHERE id = ?", (book_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "book not found"}), 404
+        fields = {
+            "title": normalize_text(payload.get("title")) or row["title"],
+            "description": normalize_text(payload.get("description")) or row["description"],
+            "cover_url": normalize_text(payload.get("coverUrl")) if "coverUrl" in payload else (row["cover_url"] or ""),
+            "category": normalize_text(payload.get("category")) if "category" in payload else (row["category"] or ""),
+            "sort_order": int(payload.get("sortOrder")) if "sortOrder" in payload and str(payload.get("sortOrder")).strip() != "" else int(row["sort_order"] or 0),
+            "updated_at": datetime.utcnow().isoformat(timespec="seconds"),
+        }
+        conn.execute(
+            """
+            UPDATE books
+            SET title = ?, description = ?, cover_url = ?, category = ?, sort_order = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                fields["title"],
+                fields["description"],
+                fields["cover_url"],
+                fields["category"],
+                fields["sort_order"],
+                fields["updated_at"],
+                book_id,
+            ),
+        )
+    return jsonify({"ok": True})
+
+
+@app.post("/api/admin/books/reorder")
+def api_admin_reorder_books():
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    ordered_ids = payload.get("orderedIds")
+    if not isinstance(ordered_ids, list):
+        return jsonify({"error": "orderedIds must be a list"}), 400
+
+    clean_ids = [normalize_text(item) for item in ordered_ids if normalize_text(item)]
+    if not clean_ids:
+        return jsonify({"error": "orderedIds is empty"}), 400
+
+    with db_conn() as conn:
+        rows = conn.execute("SELECT id FROM books").fetchall()
+        existing = {row["id"] for row in rows}
+        for book_id in clean_ids:
+            if book_id not in existing:
+                return jsonify({"error": f"book not found: {book_id}"}), 404
+        for idx, book_id in enumerate(clean_ids):
+            conn.execute(
+                "UPDATE books SET sort_order = ?, updated_at = ? WHERE id = ?",
+                (idx, datetime.utcnow().isoformat(timespec="seconds"), book_id),
+            )
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/admin/books/<book_id>")
+def api_admin_delete_book(book_id):
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    with db_conn() as conn:
+        row = conn.execute("SELECT id FROM books WHERE id = ?", (book_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "book not found"}), 404
+        conn.execute("DELETE FROM chapters WHERE book_id = ?", (book_id,))
+        conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
+    return jsonify({"ok": True})
+
+
+@app.get("/api/novel-studio/health")
+def api_novel_studio_health():
+    orchestrator = get_request_orchestrator()
+    return jsonify(
+        {
+            "ok": True,
+            "provider": "moonshot" if orchestrator.llm.enabled() else "offline-fallback",
+            "model": orchestrator.llm.model if orchestrator.llm.enabled() else "fallback-template",
+        }
+    )
+
+
+@app.get("/api/novel-studio/student-profile-template")
+def api_novel_studio_student_profile_template():
+    return jsonify({"ok": True, "template": STUDENT_PROFILE_TEMPLATE})
+
+
+@app.get("/api/novel-studio/project-state")
+def api_novel_studio_project_state():
+    project_name = request.args.get("projectName", "")
+    if not normalize_text(project_name):
+        return jsonify({"ok": True, "state": {}, "studentProfile": normalize_student_profile({}), "routingStrategy": {}, "updatedAt": ""})
+    state = get_project_state(project_name)
+    return jsonify({"ok": True, **state})
+
+
+@app.get("/api/novel-studio/knowledge")
+def api_novel_studio_knowledge_list():
+    query = request.args.get("q", "")
+    limit = request.args.get("limit", "120")
+    rows = list_knowledge(limit=limit, query=query)
+    return jsonify({"ok": True, "items": rows})
+
+
+@app.post("/api/novel-studio/knowledge")
+def api_novel_studio_knowledge_create():
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    try:
+        created_ids = create_knowledge(
+            title=payload.get("title"),
+            content=payload.get("content"),
+            tags=payload.get("tags", ""),
+            source=payload.get("source", "manual"),
+            auto_chunk=bool(payload.get("autoChunk", True)),
+        )
+        items = get_knowledge_by_ids(created_ids)
+        return jsonify({"ok": True, "createdCount": len(created_ids), "items": items})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.delete("/api/novel-studio/knowledge/<knowledge_id>")
+def api_novel_studio_knowledge_delete(knowledge_id):
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    ok = delete_knowledge(knowledge_id)
+    if not ok:
+        return jsonify({"error": "knowledge not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/novel-studio/outline")
+def api_novel_studio_outline():
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    if not normalize_text(payload.get("premise")):
+        return jsonify({"error": "premise is required"}), 400
+    if not normalize_text(payload.get("projectName")):
+        return jsonify({"error": "projectName is required"}), 400
+
+    payload["totalChapters"] = _to_int(payload.get("totalChapters"), default=20, low=1, high=200)
+    payload["chapterIndex"] = 1
+    saved_state = get_project_state(payload.get("projectName"))
+    payload["projectState"] = saved_state.get("state") or {}
+    payload["recentChapters"] = list_project_chapter_context(payload.get("projectName"), limit=60)
+    payload["studentProfile"] = parse_student_profile_payload(payload.get("studentProfile") or saved_state.get("studentProfile"))
+    selected_knowledge = resolve_knowledge_for_generation(payload)
+    orchestrator = get_request_orchestrator(payload)
+    result = orchestrator.generate_outline(payload, selected_knowledge)
+    return jsonify({"ok": True, "result": result})
+
+
+@app.post("/api/novel-studio/generate")
+def api_novel_studio_generate():
+    if not require_admin():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    if not normalize_text(payload.get("premise")):
+        return jsonify({"error": "premise is required"}), 400
+    if not normalize_text(payload.get("projectName")):
+        return jsonify({"error": "projectName is required"}), 400
+
+    chapter_index = _to_int(payload.get("chapterIndex"), default=1, low=1, high=2000)
+    total_chapters = _to_int(payload.get("totalChapters"), default=20, low=1, high=2000)
+    payload["chapterIndex"] = chapter_index
+    payload["totalChapters"] = total_chapters
+
+    saved_state = get_project_state(payload.get("projectName"))
+    payload["projectState"] = saved_state.get("state") or {}
+    payload["recentChapters"] = list_project_chapter_context(payload.get("projectName"), limit=80)
+    payload["studentProfile"] = parse_student_profile_payload(payload.get("studentProfile") or saved_state.get("studentProfile"))
+
+    if "energyBefore" not in payload:
+        payload["energyBefore"] = latest_project_energy(payload.get("projectName"))
+
+    selected_knowledge = resolve_knowledge_for_generation(payload)
+    orchestrator = get_request_orchestrator(payload)
+    result = orchestrator.generate_chapter(payload, selected_knowledge)
+    record_id = save_novel_chapter_result(
+        project_name=payload.get("projectName"),
+        chapter_index=chapter_index,
+        total_chapters=total_chapters,
+        result=result,
+    )
+    project_state = (result.get("projectState") or {}).get("merged") or {}
+    routing_strategy = result.get("routingStrategy") or {}
+    student_profile = result.get("studentProfile") or payload.get("studentProfile") or {}
+    upsert_project_state(
+        project_name=payload.get("projectName"),
+        state=project_state,
+        student_profile=student_profile,
+        routing=routing_strategy,
+    )
+    memory_snapshot_id = persist_project_memory_snapshot(
+        project_name=payload.get("projectName"),
+        chapter_index=chapter_index,
+        merged_state=project_state,
+        student_profile=student_profile,
+        routing_strategy=routing_strategy,
+    )
+    result["memorySnapshotKnowledgeId"] = memory_snapshot_id
+    return jsonify({"ok": True, "recordId": record_id, "result": result})
+
+
+@app.get("/api/novel-studio/chapters")
+def api_novel_studio_chapters():
+    project_name = request.args.get("projectName", "")
+    limit = request.args.get("limit", "30")
+    items = list_project_chapters(project_name=project_name, limit=limit)
+    return jsonify({"ok": True, "items": items})
+
+
 @app.get("/config.js")
 def app_config_js():
     content = "window.APP_CONFIG = { apiBaseUrl: '/api', userCanUpload: false };"
@@ -691,12 +1441,22 @@ def app_config_js():
 
 @app.get("/")
 def home():
-    return send_from_directory(APP_ROOT, "index.html")
+    return redirect("/novel-studio", code=302)
 
 
 @app.get("/admin")
 def admin_page():
     return send_from_directory(APP_ROOT, "admin.html")
+
+
+@app.get("/reader")
+def reader_page():
+    return redirect("/index.html", code=302)
+
+
+@app.get("/novel-studio")
+def novel_studio_page():
+    return send_from_directory(APP_ROOT, "novel_studio.html")
 
 
 @app.get("/<path:path>")
