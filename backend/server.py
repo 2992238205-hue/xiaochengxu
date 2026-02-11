@@ -1064,17 +1064,25 @@ def get_request_orchestrator(payload=None):
 
     model = normalize_text(request.headers.get("X-Moonshot-Model", "")) or normalize_text(data.get("moonshotModel"))
     base_url = normalize_text(request.headers.get("X-Moonshot-Base-Url", "")) or normalize_text(data.get("moonshotBaseUrl"))
+    thinking_mode = normalize_text(request.headers.get("X-Moonshot-Thinking-Mode", "")) or normalize_text(data.get("thinkingMode")) or "thinking"
+    top_p_raw = normalize_text(request.headers.get("X-Moonshot-Top-P", "")) or normalize_text(data.get("moonshotTopP"))
     timeout_raw = normalize_text(request.headers.get("X-Moonshot-Timeout", "")) or normalize_text(data.get("moonshotTimeoutSeconds"))
     try:
         timeout_seconds = float(timeout_raw) if timeout_raw else float(os.getenv("MOONSHOT_TIMEOUT_SECONDS", "120"))
     except Exception:
         timeout_seconds = float(os.getenv("MOONSHOT_TIMEOUT_SECONDS", "120"))
+    try:
+        top_p = float(top_p_raw) if top_p_raw else float(os.getenv("MOONSHOT_TOP_P", "0.95"))
+    except Exception:
+        top_p = float(os.getenv("MOONSHOT_TOP_P", "0.95"))
 
     client = MoonshotClient(
         api_key=api_key,
         base_url=base_url or os.getenv("MOONSHOT_BASE_URL", "https://api.moonshot.cn/v1"),
         model=model or os.getenv("MOONSHOT_MODEL", "kimi-k2-0905-preview"),
         timeout_seconds=timeout_seconds,
+        top_p=top_p,
+        thinking_mode=thinking_mode,
     )
     return NovelAgentOrchestrator(llm_client=client)
 
