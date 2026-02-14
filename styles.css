@@ -360,9 +360,9 @@ body {
   height: 100%;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  /* Keep pagination stable: reader UI (top/bottom bars) overlays content instead of reflowing it. */
-  padding: calc(env(safe-area-inset-top, 0px) + 16px) clamp(12px, 2.5vw, 20px)
-    calc(env(safe-area-inset-bottom, 0px) + 94px);
+  /* When UI is visible, reserve space for top bar + bottom sheet so text is never covered. */
+  padding: calc(env(safe-area-inset-top, 0px) + 72px) clamp(12px, 2.5vw, 20px)
+    calc(env(safe-area-inset-bottom, 0px) + var(--reader-sheet-height) + 16px);
   background: var(--reader-page);
   overflow: hidden;
 }
@@ -385,6 +385,12 @@ body {
 
 .reader-stage.ui-hidden .reading-panel {
   overflow-y: hidden;
+}
+
+.reader-stage.ui-hidden .page-frame {
+  /* UI hidden: use a smaller fixed padding so more text fits per page. */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 94px);
 }
 
 .reading-panel.fade {

@@ -951,6 +951,11 @@ function setReaderUiVisible(visible) {
   if (!visible) {
     hideTranslationCard();
   }
+  // Update CSS variables first, then repaginate so the page height matches UI state.
+  updateReaderLayoutMetrics();
+  if (isViewActive("reader")) {
+    renderCurrentChapter({ keepTranslationCard: !elements.translationCard.classList.contains("hidden") });
+  }
   scheduleReaderLayoutMetrics();
 }
 
@@ -1313,7 +1318,18 @@ function applyReaderAppearance() {
   elements.readerStage.style.setProperty("--reader-line-height", String(state.settings.lineHeight));
 }
 
-function renderCurrentChapter() {
+function getEffectiveSheetHeightKey() {
+  if (!state.readerUiVisible) {
+    return "0";
+  }
+  if (!elements.readerBottomSheet) {
+    return "0";
+  }
+  const rect = elements.readerBottomSheet.getBoundingClientRect();
+  return String(Math.max(0, Math.round(rect.height || 0)));
+}
+
+function renderCurrentChapter(options = {}) {
   const chapter = currentChapter();
   if (!chapter) {
     return;
@@ -1326,12 +1342,16 @@ function renderCurrentChapter() {
   elements.readerChapterTitle.textContent = chapter.title;
 
   const viewportKey = getPaginationViewportKey();
+  const uiKey = state.readerUiVisible ? "ui1" : "ui0";
+  const sheetKey = getEffectiveSheetHeightKey();
   const pagesKey = [
     state.activeBookId,
     state.activeChapterIndex,
     state.settings.fontSize,
     state.settings.lineHeight,
-    viewportKey
+    viewportKey,
+    uiKey,
+    sheetKey
   ].join(":");
 
   if (state.cachedPagesKey !== pagesKey) {
@@ -1361,7 +1381,9 @@ function renderCurrentChapter() {
 
   paintCurrentPage(true);
   updateGateStatus();
-  hideTranslationCard();
+  if (!options.keepTranslationCard) {
+    hideTranslationCard();
+  }
   void reportReadingHistory();
 }
 
