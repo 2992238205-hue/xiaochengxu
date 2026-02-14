@@ -8,11 +8,17 @@
   --accent-2: #0f3caa;
   --ok: #0f9d58;
 
-  --reader-bg: #101318;
-  --reader-ink: #c7ccd3;
-  --reader-muted: #8892a2;
-  --reader-panel: rgba(15, 20, 29, 0.88);
-  --reader-line: rgba(255, 255, 255, 0.08);
+  --reader-bg: #efe2c8;
+  --reader-page: #f8eed8;
+  --reader-ink: #2f2719;
+  --reader-heading: #2f2719;
+  --reader-muted: #756950;
+  --reader-panel: rgba(226, 210, 175, 0.92);
+  --reader-line: rgba(112, 92, 58, 0.2);
+  --reader-top-bg: linear-gradient(180deg, rgba(245, 234, 207, 0.95), rgba(245, 234, 207, 0.1));
+  --reader-btn-bg: rgba(248, 240, 221, 0.88);
+  --reader-btn-border: rgba(114, 96, 63, 0.3);
+  --reader-btn-ink: #3d3222;
   --badge: #f14b65;
 }
 
@@ -57,9 +63,13 @@ body {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.tabs.hidden {
+  display: none;
 }
 
 .tab-button {
@@ -104,6 +114,22 @@ body {
   color: var(--muted);
 }
 
+.hidden {
+  display: none !important;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.actions input[type="text"],
+.actions input[type="tel"] {
+  min-width: 160px;
+}
+
 .format-details {
   margin-top: 10px;
 }
@@ -121,6 +147,46 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
+}
+
+.bookshelf-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.shelf-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fbff;
+}
+
+.shelf-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.shelf-section-head h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.shelf-count {
+  font-size: 0.8rem;
+  color: #425675;
+  background: #edf3ff;
+  border: 1px solid #cfddf6;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.shelf-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .book-item {
@@ -153,13 +219,56 @@ body {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: linear-gradient(180deg, #12161d, #0f1319);
+  background: var(--reader-bg);
   color: var(--reader-ink);
   display: block;
   overflow: hidden;
   --reader-sheet-height: 320px;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.reader-stage[data-reader-theme="paper"][data-night="0"] {
+  --reader-bg: #ece0c7;
+  --reader-page: #f8eed8;
+  --reader-ink: #2f2719;
+  --reader-heading: #2f2719;
+  --reader-muted: #756950;
+  --reader-panel: rgba(226, 210, 175, 0.92);
+  --reader-line: rgba(112, 92, 58, 0.2);
+  --reader-top-bg: linear-gradient(180deg, rgba(245, 234, 207, 0.95), rgba(245, 234, 207, 0.1));
+  --reader-btn-bg: rgba(248, 240, 221, 0.88);
+  --reader-btn-border: rgba(114, 96, 63, 0.3);
+  --reader-btn-ink: #3d3222;
+}
+
+.reader-stage[data-reader-theme="green"][data-night="0"] {
+  --reader-bg: #dbe8d5;
+  --reader-page: #edf5e8;
+  --reader-ink: #243224;
+  --reader-heading: #223021;
+  --reader-muted: #5a6f59;
+  --reader-panel: rgba(212, 228, 203, 0.9);
+  --reader-line: rgba(71, 106, 69, 0.2);
+  --reader-top-bg: linear-gradient(180deg, rgba(225, 240, 217, 0.95), rgba(225, 240, 217, 0.1));
+  --reader-btn-bg: rgba(236, 245, 230, 0.9);
+  --reader-btn-border: rgba(66, 109, 63, 0.26);
+  --reader-btn-ink: #294126;
+}
+
+.reader-stage[data-night="1"] {
+  --reader-bg: linear-gradient(180deg, #12161d, #0f1319);
+  --reader-page: #141b26;
+  --reader-ink: #c7ccd3;
+  --reader-heading: #f5f7fa;
+  --reader-muted: #8892a2;
+  --reader-panel: rgba(15, 20, 29, 0.88);
+  --reader-line: rgba(255, 255, 255, 0.08);
+  --reader-top-bg: linear-gradient(180deg, rgba(8, 10, 16, 0.76), rgba(8, 10, 16, 0));
+  --reader-btn-bg: rgba(255, 255, 255, 0.08);
+  --reader-btn-border: rgba(255, 255, 255, 0.2);
+  --reader-btn-ink: #e5eaf2;
 }
 
 .reader-ui-layer {
@@ -194,13 +303,13 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: 12px 14px 8px;
-  background: linear-gradient(180deg, rgba(8, 10, 16, 0.7), rgba(8, 10, 16, 0));
+  background: var(--reader-top-bg);
 }
 
 .reader-top-bar h2 {
   margin: 0;
   font-size: 1.1rem;
-  color: #f5f7fa;
+  color: var(--reader-heading);
 }
 
 .reader-title-block {
@@ -219,20 +328,63 @@ body {
   position: absolute;
   inset: 0;
   z-index: 10;
-  overflow: auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 72px) clamp(12px, 2.5vw, 20px)
-    calc(env(safe-area-inset-bottom, 0px) + var(--reader-sheet-height) + 16px);
-  line-height: 1.82;
-  font-size: 20px;
-  color: var(--reader-ink);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
   transition: opacity 180ms ease;
   -webkit-user-select: text;
   user-select: text;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.reading-panel::-webkit-scrollbar {
+  display: none;
+}
+
+.page-track {
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  will-change: transform;
+}
+
+.page-frame {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  /* Keep pagination stable: reader UI (top/bottom bars) overlays content instead of reflowing it. */
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) clamp(12px, 2.5vw, 20px)
+    calc(env(safe-area-inset-bottom, 0px) + 94px);
+  background: var(--reader-page);
+  overflow: hidden;
+}
+
+.page-content {
+  color: var(--reader-ink);
+  font-size: var(--reader-font-size, 20px);
+  line-height: var(--reader-line-height, 1.7);
+  height: 100%;
+  /* Never vertical-scroll inside a page. Pages should be fully paginated. */
+  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  text-rendering: optimizeLegibility;
+}
+
+.page-content::-webkit-scrollbar {
+  display: none;
 }
 
 .reader-stage.ui-hidden .reading-panel {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 94px);
+  overflow-y: hidden;
 }
 
 .reading-panel.fade {
@@ -283,8 +435,9 @@ body {
   z-index: 27;
   margin: 0;
   padding: 10px;
-  border: 1px solid rgba(56, 133, 255, 0.4);
-  background: rgba(28, 53, 98, 0.65);
+  border: 1px solid var(--reader-line);
+  background: var(--reader-page);
+  background: color-mix(in srgb, var(--reader-page) 88%, transparent);
   border-radius: 12px;
   display: flex;
   justify-content: space-between;
@@ -294,7 +447,7 @@ body {
 
 .translation-card p {
   margin: 4px 0 0;
-  color: #dce9ff;
+  color: var(--reader-muted);
   line-height: 1.45;
 }
 
@@ -330,7 +483,7 @@ body {
 
 .reader-controls {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
   margin-top: 10px;
 }
@@ -339,18 +492,19 @@ body {
   display: grid;
   gap: 6px;
   font-size: 0.85rem;
-  color: #cad2de;
+  color: var(--reader-muted);
 }
 
 .chinese-panel {
   margin-top: 8px;
   max-height: 160px;
   overflow: auto;
-  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border: 1px dashed var(--reader-line);
   border-radius: 12px;
   padding: 10px;
-  color: #cad2de;
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--reader-muted);
+  background: var(--reader-page);
+  background: color-mix(in srgb, var(--reader-page) 84%, transparent);
   line-height: 1.7;
 }
 
@@ -447,9 +601,13 @@ button {
 }
 
 .reader-stage button {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  color: #e5eaf2;
+  border-color: var(--reader-btn-border);
+  background: var(--reader-btn-bg);
+  color: var(--reader-btn-ink);
+}
+
+.reader-stage .primary-button {
+  color: #fff;
 }
 
 button:disabled {
@@ -614,14 +772,9 @@ ol {
     display: grid;
   }
 
-  .reading-panel {
-    padding-left: 10px;
-    padding-right: 10px;
+  .page-frame {
+    padding-left: 12px;
+    padding-right: 12px;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--reader-sheet-height) + 12px);
-    line-height: 1.78;
-  }
-
-  .reader-stage.ui-hidden .reading-panel {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
   }
 }
