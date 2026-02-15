@@ -1584,6 +1584,66 @@ function splitParagraphByMeasure(paragraph) {
   return segments;
 }
 
+function splitParagraphByMeasureWithPrefix(prefixParas, paragraph) {
+  // Try to split `paragraph` so that its first segment fits in the remaining space of `prefixParas`.
+  // Returns [firstSegment, ...restSegments] or null when no segment can fit with the prefix.
+  const prefix = Array.isArray(prefixParas) ? prefixParas.filter(Boolean) : [];
+  const text = String(paragraph || "").trim();
+  if (prefix.length === 0 || !text) {
+    return null;
+  }
+
+  const hasWhitespace = /\s/.test(text);
+  if (hasWhitespace) {
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      return null;
+    }
+    let lo = 1;
+    let hi = words.length;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const candidate = words.slice(0, mid).join(" ");
+      if (measurePageFits([...prefix, candidate])) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best <= 0) {
+      return null;
+    }
+    const first = words.slice(0, best).join(" ").trim();
+    const restText = words.slice(best).join(" ").trim();
+    const restSegments = restText ? splitParagraphByMeasure(restText) : [];
+    return [first, ...restSegments].filter(Boolean);
+  }
+
+  // CJK / no-whitespace fallback: binary search by substring length.
+  let lo = 1;
+  let hi = text.length;
+  let best = 0;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const candidate = text.slice(0, mid);
+    if (measurePageFits([...prefix, candidate])) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (best <= 0) {
+    return null;
+  }
+  const first = text.slice(0, best).trim();
+  const restText = text.slice(best).trim();
+  const restSegments = restText ? splitParagraphByMeasure(restText) : [];
+  return [first, ...restSegments].filter(Boolean);
+}
+
 function paginateChapterByMeasure(text) {
   // iOS browsers/webviews may report a wrong clientHeight; use visual/rect height first.
   const rect = elements.readingPanel?.getBoundingClientRect?.();
@@ -1623,6 +1683,22 @@ function paginateChapterByMeasure(text) {
       continue;
     }
     if (currentParas.length > 0) {
+      // Try to fill the remaining space by splitting this paragraph.
+      const pieces = splitParagraphByMeasureWithPrefix(currentParas, paragraph);
+      if (Array.isArray(pieces) && pieces.length > 0) {
+        const [firstPiece, ...restPieces] = pieces;
+        pages.push([...currentParas, firstPiece].join("\n\n").trim());
+        currentParas = [];
+        // Replace current paragraph with the remaining pieces so the loop continues from them.
+        const rest = restPieces.filter(Boolean);
+        if (rest.length > 0) {
+          joined.splice(index, 1, ...rest);
+        } else {
+          joined.splice(index, 1);
+        }
+        continue;
+      }
+
       pages.push(currentParas.join("\n\n").trim());
       currentParas = [];
       continue;
