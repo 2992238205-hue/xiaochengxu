@@ -1479,8 +1479,9 @@ let pageMeasureFrame = null;
 let pageMeasureContent = null;
 
 function getPaginationViewportKey() {
-  const width = Math.max(0, Math.round(elements.readingPanel?.clientWidth || 0));
-  const height = Math.max(0, Math.round(elements.readingPanel?.clientHeight || 0));
+  const rect = elements.readingPanel?.getBoundingClientRect?.();
+  const width = Math.max(0, Math.round(rect?.width || elements.readingPanel?.clientWidth || 0));
+  const height = Math.max(0, Math.round(rect?.height || elements.readingPanel?.clientHeight || 0));
   return `${width}x${height}`;
 }
 
@@ -1584,8 +1585,14 @@ function splitParagraphByMeasure(paragraph) {
 }
 
 function paginateChapterByMeasure(text) {
-  const panelWidth = Math.max(0, Math.round(elements.readingPanel?.clientWidth || 0));
-  const panelHeight = Math.max(0, Math.round(elements.readingPanel?.clientHeight || 0));
+  // iOS browsers/webviews may report a wrong clientHeight; use visual/rect height first.
+  const rect = elements.readingPanel?.getBoundingClientRect?.();
+  const vv = window.visualViewport;
+  const panelWidth = Math.max(0, Math.round(rect?.width || elements.readingPanel?.clientWidth || 0));
+  const panelHeight = Math.max(
+    0,
+    Math.round(rect?.height || vv?.height || elements.readingPanel?.clientHeight || 0)
+  );
   if (panelWidth < 240 || panelHeight < 240) {
     return null;
   }
@@ -1674,7 +1681,7 @@ function renderPageParagraphs(pageText, pageIndex) {
       const badgeClass = count > 0 ? "comment-badge" : "comment-badge hidden";
       return `<p class="paragraph" data-anchor-id="${anchorId}" data-page-index="${pageIndex}" data-anchor-preview="${escapeAttr(
         preview
-      )}">${decorateWords(escapeHtml(normalizedParagraph))}<button type="button" class="${badgeClass}" data-anchor-id="${anchorId}" data-page-index="${pageIndex}">${displayCommentCount(
+      )}">${decorateWords(normalizedParagraph)}<button type="button" class="${badgeClass}" data-anchor-id="${anchorId}" data-page-index="${pageIndex}">${displayCommentCount(
         count
       )}</button></p>`;
     })
@@ -1733,10 +1740,23 @@ function renderChinesePanel() {
   elements.chinesePanel.classList.remove("hidden");
 }
 
-function decorateWords(escapedText) {
-  return escapedText.replace(/\b([A-Za-z][A-Za-z'-]*)\b/g, (_match, word) => {
-    return `<span class="word" data-word="${word.toLowerCase()}">${word}</span>`;
-  });
+function decorateWords(text) {
+  // Build safe HTML: escape everything, then wrap matched words.
+  // Important: do NOT run regex on HTML-escaped strings, otherwise it will break entities like &quot; / &#39;.
+  const raw = String(text || "");
+  const pattern = /\b([A-Za-z][A-Za-z'-]*)\b/g;
+  let lastIndex = 0;
+  let out = "";
+  let match;
+  while ((match = pattern.exec(raw)) !== null) {
+    const start = match.index;
+    const word = match[0];
+    out += escapeHtml(raw.slice(lastIndex, start));
+    out += `<span class="word" data-word="${escapeAttr(word.toLowerCase())}">${escapeHtml(word)}</span>`;
+    lastIndex = start + word.length;
+  }
+  out += escapeHtml(raw.slice(lastIndex));
+  return out;
 }
 
 function turnPage(direction) {

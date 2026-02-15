@@ -4,8 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101318">
+  <!-- Extra cache-busting for mobile webviews (e.g., WeChat) -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="icon" href="data:,">
   <title>英语小说阅读 MVP</title>
-  <link rel="stylesheet" href="./styles.css">
+  <!-- NOTE: bump version when deploying to avoid stale caches -->
+  <link rel="stylesheet" href="./styles.css?v=20260214-3">
 </head>
 <body>
   <div class="app-shell">
@@ -14,11 +20,13 @@
         <h1>英语小说阅读</h1>
         <p>最小 MVP 验证版</p>
       </div>
+      <div id="auth-mini" class="hint">未登录</div>
     </header>
 
     <nav class="tabs">
       <button data-view="shelf" class="tab-button active">书架</button>
       <button data-view="reader" class="tab-button">阅读</button>
+      <button data-view="generator" class="tab-button">生成器</button>
       <button data-view="profile" class="tab-button">我的</button>
     </nav>
 
@@ -48,8 +56,16 @@
           </details>
         </div>
         <div class="card">
-          <h2>我的书架</h2>
-          <div id="bookshelf-list" class="book-grid"></div>
+          <h2>书架（个人 + 公共）</h2>
+          <div id="personal-book-actions" class="actions hidden">
+            <button id="toggle-manage-books" type="button">管理个人书架</button>
+            <button id="batch-delete-books" type="button">批量删除</button>
+            <button id="open-generator" type="button" class="primary-button">去生成器</button>
+          </div>
+          <div class="actions">
+            <button id="refresh-shelf" type="button">刷新书架</button>
+          </div>
+          <div id="bookshelf-list" class="book-grid bookshelf-layout"></div>
         </div>
       </section>
 
@@ -88,6 +104,17 @@
                 行距
                 <input id="line-height" type="range" min="1.4" max="2.2" step="0.1" value="1.7">
               </label>
+              <label>
+                页面颜色
+                <select id="reader-theme">
+                  <option value="paper">纸张米黄</option>
+                  <option value="green">护眼绿色</option>
+                </select>
+              </label>
+              <label class="inline-switch">
+                <input id="night-mode" type="checkbox">
+                夜间模式
+              </label>
               <label class="inline-switch">
                 <input id="show-chinese" type="checkbox">
                 显示中文对照
@@ -116,6 +143,30 @@
 
       <section id="profile-view" class="view">
         <div class="card">
+          <h2>账号</h2>
+          <p id="auth-status-text" class="hint">未登录</p>
+          <form id="auth-form" class="profile-form">
+            <label>手机号（中国大陆）
+              <input id="auth-phone" type="tel" placeholder="13800138000">
+            </label>
+            <div class="actions">
+              <button id="send-otp" type="button">发送验证码</button>
+              <input id="auth-otp" type="text" inputmode="numeric" maxlength="6" placeholder="6位验证码">
+              <button id="verify-otp" type="button" class="primary-button">登录</button>
+              <button id="logout-button" type="button">退出登录</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>本月生成配额</h2>
+          <p id="quota-label">未登录</p>
+          <div class="progress-bar">
+            <div id="quota-fill"></div>
+          </div>
+        </div>
+
+        <div class="card">
           <h2>学习信息</h2>
           <form id="profile-form" class="profile-form">
             <label>年龄
@@ -142,8 +193,28 @@
             <div id="progress-fill"></div>
           </div>
         </div>
+
+        <div class="card">
+          <h2>阅读历史</h2>
+          <p class="hint">按时间倒序，点击可跳转到对应章页</p>
+          <div id="reading-history-list" class="book-grid"></div>
+        </div>
+
+        <div class="card">
+          <h2>书架后台</h2>
+          <p class="hint">上传公共书籍后，读者刷新书架即可看到新书。</p>
+          <div class="actions">
+            <a href="/bookshelf-admin" class="primary-button" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">打开书架后台</a>
+          </div>
+        </div>
       </section>
     </main>
+
+    <nav id="bottom-nav" class="tabs hidden" style="margin-top:12px;">
+      <button data-bottom-nav="shelf" class="tab-button active">书架</button>
+      <button data-bottom-nav="generator" class="tab-button">生成器</button>
+      <button data-bottom-nav="profile" class="tab-button">我的</button>
+    </nav>
   </div>
 
   <dialog id="quiz-dialog">
@@ -197,7 +268,7 @@
     </div>
   </dialog>
 
-  <script src="./config.js"></script>
-  <script src="./app.js" defer></script>
+  <script src="./config.js?v=20260214-3"></script>
+  <script src="./app.js?v=20260214-3" defer></script>
 </body>
 </html>
