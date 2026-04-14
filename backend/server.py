@@ -429,7 +429,13 @@ def init_transcription_tables():
 
 
 def require_admin():
-    key = request.headers.get("X-Admin-Key", "")
+    import base64
+    raw = request.headers.get("X-Admin-Key", "")
+    # Try base64 decode first (frontend encodes to avoid non-ASCII header issues)
+    try:
+        key = base64.b64decode(raw).decode("utf-8")
+    except Exception:
+        key = raw
     return bool(key) and key == ADMIN_KEY
 
 

@@ -364,7 +364,7 @@ focus, memory, logic</pre>
 
     function adminHeaders(overrideKey = "") {
       const key = String(overrideKey || adminKeyInput.value).trim();
-      return key ? { "X-Admin-Key": key } : {};
+      return key ? { "X-Admin-Key": btoa(unescape(encodeURIComponent(key))) } : {};
     }
 
     function updateSelectedBooksCount() {
@@ -587,7 +587,7 @@ focus, memory, logic</pre>
       try {
         const res = await fetch("/api/admin/books/upload", {
           method: "POST",
-          headers: { "X-Admin-Key": adminKey },
+          headers: adminHeaders(adminKey),
           body: formData
         });
         const data = await res.json();
