@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小说智能体工作台</title>
+    <link rel="stylesheet" href="/novel_studio.css" />
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>小说智能体工作台</h1>
+        <p>多Agent协同生成连载小说（支持知识库注入 + Kimi API）</p>
+      </div>
+      <div class="top-actions">
+        <span id="health-pill" class="pill">模型检测中...</span>
+        <a href="/" class="ghost-link">返回阅读站</a>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>1. 系统配置</h2>
+        <div class="form-row">
+          <label for="admin-key">Admin Key</label>
+          <input id="admin-key" type="password" placeholder="用于写入知识库和触发生成" />
+        </div>
+        <div class="form-row">
+          <label for="moonshot-api-key">Kimi API Key（本地保存）</label>
+          <input id="moonshot-api-key" type="password" placeholder="sk-..." />
+        </div>
+        <div class="grid-2">
+          <div class="form-row">
+            <label for="moonshot-model">Kimi Model</label>
+            <input id="moonshot-model" type="text" value="kimi-k2-0905-preview" />
+          </div>
+          <div class="form-row">
+            <label for="moonshot-timeout">Timeout(s)</label>
+            <input id="moonshot-timeout" type="number" value="240" min="30" max="1200" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-row">
+            <label for="thinking-mode">思考模式</label>
+            <select id="thinking-mode">
+              <option value="thinking" selected>thinking（推荐）</option>
+              <option value="instant">instant（更快）</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="moonshot-top-p">Top P</label>
+            <input id="moonshot-top-p" type="number" value="0.95" min="0.1" max="1" step="0.01" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="moonshot-base-url">Kimi Base URL</label>
+          <input id="moonshot-base-url" type="text" value="https://api.moonshot.cn/v1" />
+        </div>
+        <div class="status-line">提示：API Key 仅存本机浏览器 localStorage，不写入服务器数据库。</div>
+        <div class="form-row">
+          <label for="knowledge-query">知识检索词</label>
+          <input id="knowledge-query" type="text" placeholder="如：深度思考 主要矛盾 第一性原理" />
+        </div>
+        <div class="form-row">
+          <label for="knowledge-top-k">检索数量</label>
+          <input id="knowledge-top-k" type="number" value="6" min="1" max="16" />
+        </div>
+        <div class="form-inline">
+          <label class="checkbox-line">
+            <input id="require-llm" type="checkbox" checked />
+            强制使用 Kimi（禁用离线模板）
+          </label>
+        </div>
+        <div class="form-inline">
+          <label class="checkbox-line">
+            <input id="allow-transient-fallback" type="checkbox" checked />
+            限流/超时时允许降级继续（推荐）
+          </label>
+        </div>
+        <div class="form-inline">
+          <label class="checkbox-line">
+            <input id="multi-model-collab" type="checkbox" checked />
+            多模型协作（深度思考委员会）
+          </label>
+        </div>
+        <div class="form-row">
+          <label for="deep-committee-models">深度委员会模型（逗号分隔，至少2个）</label>
+          <input id="deep-committee-models" type="text" value="kimi-k2-thinking,kimi-k2-0905-preview" />
+        </div>
+        <div class="form-row">
+          <label for="agent-model-map-json">Agent模型路由JSON（可改）</label>
+          <textarea id="agent-model-map-json" rows="7">{
+  "outline": "kimi-k2-thinking",
+  "framework": "kimi-k2-0905-preview",
+  "character": "kimi-k2-0905-preview",
+  "scene": "kimi-k2-0905-preview",
+  "deep_primary": "kimi-k2-thinking",
+  "deep_secondary": "kimi-k2-0905-preview",
+  "deep_referee": "kimi-k2-thinking",
+  "writer": "kimi-k2-0905-preview",
+  "qa": "kimi-k2-thinking",
+  "chapter_logic_audit": "kimi-k2-thinking",
+  "global_logic_audit": "kimi-k2-thinking",
+  "deep_quality_audit": "kimi-k2-thinking",
+  "rewrite": "kimi-k2-thinking"
+}</textarea>
+        </div>
+        <div class="form-inline">
+          <label class="checkbox-line">
+            <input id="auto-rewrite" type="checkbox" checked />
+            审核不通过自动改写
+          </label>
+          <label for="max-rewrite-rounds">最多回合</label>
+          <input id="max-rewrite-rounds" type="number" value="2" min="0" max="5" style="width:88px" />
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>2. 知识库录入</h2>
+        <div class="form-row">
+          <label for="knowledge-title">标题</label>
+          <input id="knowledge-title" type="text" placeholder="例如：深度思考十阶总纲" />
+        </div>
+        <div class="form-row">
+          <label for="knowledge-tags">标签</label>
+          <input id="knowledge-tags" type="text" placeholder="深度思考,高考,第一性原理" />
+        </div>
+        <div class="form-row">
+          <label for="knowledge-source">来源</label>
+          <input id="knowledge-source" type="text" value="manual" />
+        </div>
+        <div class="form-row">
+          <label for="knowledge-content">内容</label>
+          <textarea id="knowledge-content" rows="8" placeholder="粘贴你的方法论、案例、教材结构、世界观设定..."></textarea>
+        </div>
+        <div class="form-inline">
+          <label class="checkbox-line">
+            <input id="knowledge-auto-chunk" type="checkbox" checked />
+            自动分片（长文本会切分保存）
+          </label>
+          <button id="add-knowledge" class="primary">保存知识</button>
+        </div>
+        <div id="knowledge-list" class="list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>3. 项目与生成</h2>
+        <div class="form-row">
+          <label for="project-name">项目名</label>
+          <input id="project-name" type="text" value="林渊-深瞳逆袭" />
+        </div>
+        <div class="grid-2">
+          <div class="form-row">
+            <label for="chapter-index">章节序号</label>
+            <input id="chapter-index" type="number" value="1" min="1" max="2000" />
+          </div>
+          <div class="form-row">
+            <label for="total-chapters">总章节</label>
+            <input id="total-chapters" type="number" value="20" min="1" max="2000" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-row">
+            <label for="target-word-count">每章目标字数</label>
+            <input id="target-word-count" type="number" value="3200" min="1200" max="12000" />
+          </div>
+          <div class="form-row">
+            <label for="detail-density">细节密度(1-10)</label>
+            <input id="detail-density" type="number" value="8" min="1" max="10" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="writing-style">文风</label>
+          <input id="writing-style" type="text" value="现实向高燃爽文，细腻心理+强推进节奏" />
+        </div>
+        <div class="form-row">
+          <label for="protagonist-profile">男主设定</label>
+          <textarea id="protagonist-profile" rows="4">软弱、爱面子、犹豫、懒惰、怕他人目光，但有绝望后的决心。</textarea>
+        </div>
+        <div class="form-row">
+          <label for="ai-profile">AI设定</label>
+          <textarea id="ai-profile" rows="4">深瞳：毒舌导师，不直接给答案，逼主角拆解问题并拿到可复刻结果。</textarea>
+        </div>
+        <div class="form-row">
+          <label for="premise">故事前提</label>
+          <textarea id="premise" rows="6">男主高考失利后重生回高考前一年，绑定未来AI“深瞳”。深瞳核心任务是训练深度思考能力，不给捷径，只给高强度引导和可验证方法。</textarea>
+        </div>
+        <div class="form-row">
+          <label for="deep-thinking-card">深度思考核心卡片</label>
+          <textarea id="deep-thinking-card" rows="5">深度思考=矛盾论+第一性原理+立体多维。白痴问题->5Why->最小单元->组合规律->重构行动。</textarea>
+        </div>
+        <div class="form-row">
+          <label for="student-profile-json">学生画像 JSON（用于自动分流）</label>
+          <textarea id="student-profile-json" rows="10"></textarea>
+        </div>
+        <div class="form-inline">
+          <button id="fill-student-template" class="secondary">填入画像模板</button>
+          <button id="generate-outline" class="secondary">生成20章大纲</button>
+          <button id="generate-chapter" class="primary">生成当前章节</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>4. 输出结果</h2>
+        <div id="status-line" class="status-line">等待执行...</div>
+
+        <h3>大纲</h3>
+        <pre id="outline-output" class="output-block">暂无</pre>
+
+        <h3>章节正文</h3>
+        <pre id="chapter-output" class="output-block">暂无</pre>
+
+        <h3>自动分流策略</h3>
+        <pre id="routing-output" class="output-block">暂无</pre>
+
+        <h3>逻辑审核（章节 + 全书）</h3>
+        <pre id="logic-output" class="output-block">暂无</pre>
+
+        <h3>项目状态（人物关系/阶段/伏笔）</h3>
+        <pre id="state-output" class="output-block">暂无</pre>
+
+        <h3>多Agent中间结果</h3>
+        <pre id="agent-output" class="output-block">暂无</pre>
+      </section>
+
+      <section class="panel">
+        <h2>5. 历史章节</h2>
+        <button id="refresh-history" class="secondary">刷新历史</button>
+        <div id="history-list" class="list"></div>
+      </section>
+    </main>
+
+    <script src="/novel_studio.js"></script>
+  </body>
+</html>

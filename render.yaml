@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: english-reader-story-lab
+    env: python
+    autoDeploy: true
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/unified_server.py
+    healthCheckPath: /reader
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: ADMIN_KEY
+        sync: false
+      - key: AUTH_HASH_SECRET
+        generateValue: true
+      - key: AUTH_COOKIE_SECURE
+        value: "1"
+      - key: AUTH_COOKIE_SAMESITE
+        value: Lax
+      - key: AUTH_DEV_OTP_FALLBACK
+        value: "0"
+      - key: BOOK_DB_PATH
+        value: /var/data/books.db
+      - key: MAIN_APP_DB_PATH
+        value: /var/data/books.db
+      - key: COVER_UPLOAD_DIR
+        value: /var/data/user_covers
+      - key: GEN_MONTHLY_LIMIT
+        value: "20"
+      - key: ALLOW_ADMIN_BOOTSTRAP
+        value: "0"
+      - key: TZ
+        value: Asia/Shanghai
+    disk:
+      name: app-data
+      mountPath: /var/data
+      sizeGB: 2

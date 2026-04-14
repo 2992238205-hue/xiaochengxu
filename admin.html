@@ -3,43 +3,233 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>小说后台上传</title>
+  <title>深瞳阅读 — 管理后台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; margin: 0; background: #f4f7fb; color: #172234; }
-    .wrap { width: min(980px, 96%); margin: 20px auto 50px; }
-    .card { background: #fff; border: 1px solid #d9e2f0; border-radius: 14px; padding: 16px; margin-bottom: 12px; }
-    h1 { margin: 0 0 14px; font-size: 1.25rem; }
-    h2 { margin: 0 0 10px; font-size: 1.05rem; }
-    label { display: block; margin-bottom: 10px; font-size: .9rem; color: #334562; }
+    :root {
+      --bg: #f6f8fc;
+      --panel: #ffffff;
+      --ink: #1a1f2e;
+      --muted: #6b7a90;
+      --line: #e2e8f2;
+      --accent: #4f6ef7;
+      --accent-2: #3b55d9;
+      --accent-soft: rgba(79, 110, 247, 0.08);
+      --danger: #dc2626;
+      --danger-soft: rgba(220, 38, 38, 0.06);
+      --radius-sm: 10px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 16px rgba(18, 31, 53, 0.06), 0 1px 3px rgba(0,0,0,0.03);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(ellipse 600px 400px at 10% 0%, rgba(79, 110, 247, 0.05), transparent),
+        radial-gradient(ellipse 500px 300px at 90% 10%, rgba(168, 130, 255, 0.04), transparent);
+      pointer-events: none;
+    }
+    .wrap { width: min(940px, 96%); margin: 24px auto 60px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
+      transition: box-shadow 200ms ease;
+    }
+    .card:hover { box-shadow: 0 8px 28px rgba(18, 31, 53, 0.08); }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #2a3a5c, #4f6ef7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2::before {
+      content: '';
+      width: 4px;
+      height: 18px;
+      background: linear-gradient(180deg, var(--accent), #7c5cfc);
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+    label { display: block; margin-bottom: 12px; font-size: .88rem; color: var(--muted); font-weight: 500; }
     input, textarea, button, select { font: inherit; }
-    input[type="text"], input[type="password"], textarea { width: 100%; border: 1px solid #cad6ea; border-radius: 10px; padding: 9px 10px; box-sizing: border-box; background: #fff; }
-    textarea { min-height: 150px; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .btn { border: 1px solid #2557cf; background: linear-gradient(135deg,#2055d6,#153f9d); color: #fff; border-radius: 10px; padding: 10px 14px; font-weight: 600; }
-    .hint { color: #5d6c84; font-size: .85rem; line-height: 1.5; }
-    .log { white-space: pre-wrap; background: #0e1726; color: #d0f2ff; border-radius: 10px; padding: 10px; min-height: 80px; font-size: .84rem; }
-    .book-item { border: 1px solid #d8e3f4; border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #fbfdff; }
-    .book-item strong { display: inline-block; margin-bottom: 4px; }
-    .book-toolbar { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-    .book-toolbar button { padding: 6px 10px; border-radius: 8px; border: 1px solid #c7d5ee; background: #fff; color: #2b3e61; }
-    .book-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: start; margin-top: 8px; }
-    .book-cover { width: 120px; height: 160px; border-radius: 8px; border: 1px solid #d8e3f4; object-fit: cover; background: #edf2fb; }
-    .book-meta { display: grid; gap: 8px; }
+    input[type="text"], input[type="password"], textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      background: #fff;
+      font-size: 0.92rem;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.15);
+    }
+    textarea { min-height: 150px; resize: vertical; line-height: 1.6; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn {
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      border-radius: var(--radius-sm);
+      padding: 10px 18px;
+      font-weight: 600;
+      font-size: 0.92rem;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(79, 110, 247, 0.25);
+      transition: all 180ms ease;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(79, 110, 247, 0.35);
+    }
+    .btn:active { transform: translateY(0); }
+    .hint { color: var(--muted); font-size: .86rem; line-height: 1.5; }
+    .log {
+      white-space: pre-wrap;
+      background: #0f1420;
+      color: #a8d8ea;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      min-height: 80px;
+      font-size: .84rem;
+      font-family: "SF Mono", "Fira Code", monospace;
+      line-height: 1.6;
+    }
+    .book-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-bottom: 10px;
+      background: var(--panel);
+      position: relative;
+      transition: box-shadow 200ms ease;
+    }
+    .book-item:hover { box-shadow: var(--shadow-md); }
+    .book-item strong { display: inline-block; margin-bottom: 4px; font-size: 1rem; }
+    .book-toolbar { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .book-toolbar button {
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 0.86rem;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+    .book-toolbar button:hover {
+      background: #f0f3fa;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    .book-row { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; margin-top: 10px; }
+    .book-cover {
+      width: 120px;
+      height: 160px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      object-fit: cover;
+      background: linear-gradient(135deg, #edf2fb, #f8f0ff);
+    }
+    .book-meta { display: grid; gap: 10px; }
     .book-meta input { width: 100%; }
-    .danger { border-color: #e77888 !important; color: #b42336 !important; }
-    .book-batch-toolbar { display: grid; grid-template-columns: 1.4fr auto auto auto auto; gap: 8px; align-items: center; margin: 10px 0 12px; }
-    .book-batch-toolbar input[type="password"] { width: 100%; border: 1px solid #cad6ea; border-radius: 8px; padding: 8px 9px; }
-    .book-batch-toolbar button { padding: 8px 10px; border-radius: 8px; border: 1px solid #c7d5ee; background: #fff; color: #2b3e61; }
-    .pick-book { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.85rem; color: #425675; }
-    @media (max-width: 760px) { .row { grid-template-columns: 1fr; } }
-    @media (max-width: 760px) { .book-batch-toolbar { grid-template-columns: 1fr 1fr; } }
+    .danger {
+      border-color: rgba(220, 38, 38, 0.3) !important;
+      color: var(--danger) !important;
+      background: var(--danger-soft) !important;
+    }
+    .danger:hover {
+      background: rgba(220, 38, 38, 0.1) !important;
+    }
+    .book-batch-toolbar {
+      display: grid;
+      grid-template-columns: 1.4fr auto auto auto auto;
+      gap: 10px;
+      align-items: center;
+      margin: 14px 0 16px;
+    }
+    .book-batch-toolbar input[type="password"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+    }
+    .book-batch-toolbar button {
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      font-weight: 600;
+      font-size: 0.86rem;
+      cursor: pointer;
+      transition: all 150ms ease;
+    }
+    .book-batch-toolbar button:hover {
+      background: #f0f3fa;
+      transform: translateY(-1px);
+    }
+    .pick-book { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.86rem; color: var(--muted); cursor: pointer; }
+    .pick-book input { accent-color: var(--accent); }
+    .book-tasks { margin-top: 12px; }
+    .book-tasks textarea {
+      width: 100%;
+      min-height: 110px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+    .book-tasks .hint { margin: 6px 0 0; }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 999px; }
+    @media (max-width: 760px) {
+      .row { grid-template-columns: 1fr; }
+      .book-batch-toolbar { grid-template-columns: 1fr 1fr; }
+      .card { padding: 16px; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>后台上传（管理员）</h1>
+      <h1>深瞳阅读 · 管理后台</h1>
       <p class="hint">上传后，所有读者书架自动出现这本书。读者端不可上传。</p>
+      <p id="origin-tip" class="hint"></p>
+      <p><a href="/reader" class="btn" style="display:inline-block;text-decoration:none;">打开同端口读者页</a></p>
+      <p><a href="/transcribe-admin" class="btn" style="display:inline-block;text-decoration:none;">打开视频转写后台</a></p>
     </div>
 
     <div class="card">
@@ -49,8 +239,8 @@
           <input id="admin-key" type="password" placeholder="部署时设置的 ADMIN_KEY" required>
         </label>
         <p id="key-status" class="hint"></p>
-        <label>书籍文件（.md / .json）
-          <input id="book-file" type="file" accept=".md,.markdown,.json,text/markdown,application/json" required>
+        <label>书籍文件（.md / .docx / .json）
+          <input id="book-file" type="file" accept=".md,.markdown,.docx,.json,text/markdown,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
         </label>
         <div class="row">
           <label>覆盖书籍 ID（可选）
@@ -69,10 +259,42 @@
           </label>
         </div>
         <label>章节闯关任务（可选，手动配置）</label>
-        <textarea id="tasks-text" placeholder="推荐格式（不需要自己填中文）：&#10;### 1章单词表&#10;focus, logic, memory&#10;&#10;### 2章单词表&#10;purpose, feature, system&#10;&#10;也兼容旧格式：&#10;1|focus|专注"></textarea>
-        <p class="hint">不配置就没有任务；只配置某几章，就只有这些章节有闯关任务。</p>
+        <textarea id="tasks-text" placeholder="推荐格式（不需要自己填中文）：&#10;### 第1章单词表&#10;focus, logic, memory&#10;&#10;### 第2组单词表&#10;purpose, feature, system&#10;&#10;也兼容旧格式：&#10;1|focus|专注"></textarea>
+        <details class="hint" style="margin:8px 0 10px;">
+          <summary>查看任务格式示例（可直接复制）</summary>
+          <pre style="white-space:pre-wrap;background:#f6f9ff;border:1px solid #d7e3f6;border-radius:8px;padding:8px;margin:8px 0 0;">格式A（推荐，按章写）
+### 第1章单词表
+focus, memory, logic
+
+### 第2组单词表
+method|方法
+practice|练习
+
+格式B（旧格式，也支持）
+1|focus|专注
+1|memory|记忆
+2|method|方法
+
+格式C（不写章节，也支持）
+focus, memory, logic</pre>
+        </details>
+        <p class="hint">不写章节号时，默认归到第1章；可识别“第2章 / 第2组 / chapter 2 / ch2 / 2.”等标记。</p>
         <button class="btn" type="submit">上传并发布</button>
       </form>
+    </div>
+
+    <div class="card">
+      <h2>管理员密钥设置</h2>
+      <p class="hint">你可以改成自己容易记住的密钥。保存后会写入服务端文件并在下次启动继续生效。</p>
+      <div class="row">
+        <label>新管理员密钥
+          <input id="new-admin-key" type="password" placeholder="至少6位，不含空格">
+        </label>
+        <label>确认新密钥
+          <input id="confirm-new-admin-key" type="password" placeholder="再次输入新密钥">
+        </label>
+      </div>
+      <button id="save-admin-key" class="btn" type="button">保存新密钥</button>
     </div>
 
     <div class="card">
@@ -99,9 +321,13 @@
     const form = document.getElementById("upload-form");
     const logEl = document.getElementById("log");
     const bookList = document.getElementById("book-list");
+    const originTip = document.getElementById("origin-tip");
     const refreshButton = document.getElementById("refresh-books");
     const adminKeyInput = document.getElementById("admin-key");
     const keyStatus = document.getElementById("key-status");
+    const newAdminKeyInput = document.getElementById("new-admin-key");
+    const confirmNewAdminKeyInput = document.getElementById("confirm-new-admin-key");
+    const saveAdminKeyButton = document.getElementById("save-admin-key");
     const confirmAdminKeyInput = document.getElementById("confirm-admin-key");
     const selectAllBooksButton = document.getElementById("select-all-books");
     const clearSelectedBooksButton = document.getElementById("clear-selected-books");
@@ -113,6 +339,18 @@
     function log(message) {
       const time = new Date().toLocaleString();
       logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+    }
+
+    function notifyShelfChanged() {
+      try {
+        localStorage.setItem("reader_shelf_updated_at", String(Date.now()));
+      } catch (_error) {
+        // ignore
+      }
+    }
+
+    if (originTip) {
+      originTip.textContent = `当前后台地址：${window.location.origin}（请用同一个地址打开读者页查看刷新结果）`;
     }
 
     function escapeHtml(value) {
@@ -131,6 +369,30 @@
 
     function updateSelectedBooksCount() {
       selectedBooksCount.textContent = `已选 ${selectedBookIds.size} 本`;
+    }
+
+    function buildTasksText(book) {
+      const chapters = Array.isArray(book?.chapters) ? book.chapters : [];
+      const blocks = [];
+      chapters.forEach((chapter, index) => {
+        const words = Array.isArray(chapter?.targetWords) ? chapter.targetWords : [];
+        if (words.length === 0) {
+          return;
+        }
+        const lines = words
+          .map((entry) => {
+            const word = String(entry?.word || "").trim();
+            const translation = String(entry?.translation || "").trim();
+            if (!word) return "";
+            return translation ? `${word}|${translation}` : word;
+          })
+          .filter(Boolean);
+        if (lines.length === 0) {
+          return;
+        }
+        blocks.push(`### 第${index + 1}章单词表\n${lines.join("\n")}`);
+      });
+      return blocks.join("\n\n");
     }
 
     async function verifyAdminKey(key) {
@@ -206,6 +468,7 @@
         bookList.innerHTML = books.map((book, index) => {
           const cover = String(book.coverUrl || "").trim();
           const checked = selectedBookIds.has(String(book.id)) ? "checked" : "";
+          const tasksText = buildTasksText(book);
           const coverNode = cover
             ? `<img class="book-cover" src="${escapeHtml(cover)}" alt="封面">`
             : `<div class="book-cover" style="display:flex;align-items:center;justify-content:center;color:#5d6c84;">无封面</div>`;
@@ -223,6 +486,10 @@
                 </div>
               </div>
               <label class="pick-book"><input class="book-select" data-book-id="${escapeHtml(book.id)}" type="checkbox" ${checked}> 选中此书</label>
+              <div class="book-tasks">
+                <textarea data-field="tasksText" placeholder="例如：&#10;### 第1章单词表&#10;focus, logic, memory&#10;&#10;### 第2组单词表&#10;purpose, feature, system">${escapeHtml(tasksText)}</textarea>
+                <p class="hint">支持“第x章 / 第x组”自动识别。留空并保存可清空该书闯关任务。</p>
+              </div>
               <div class="book-toolbar">
                 <button type="button" data-action="save">保存修改</button>
                 <button type="button" data-action="up">上移</button>
@@ -240,6 +507,56 @@
     }
 
     refreshButton.addEventListener("click", refreshBooks);
+
+    saveAdminKeyButton.addEventListener("click", async () => {
+      const currentKey = adminKeyInput.value.trim();
+      const newKey = newAdminKeyInput.value.trim();
+      const confirmKey = confirmNewAdminKeyInput.value.trim();
+      if (!currentKey) {
+        alert("请先输入当前管理员密钥");
+        return;
+      }
+      if (!newKey) {
+        alert("请输入新管理员密钥");
+        return;
+      }
+      if (newKey.length < 6) {
+        alert("新管理员密钥至少 6 位");
+        return;
+      }
+      if (/\s/.test(newKey)) {
+        alert("新管理员密钥不能包含空格");
+        return;
+      }
+      if (newKey !== confirmKey) {
+        alert("两次输入的新密钥不一致");
+        return;
+      }
+      try {
+        const res = await fetch("/api/admin/key/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...adminHeaders(currentKey),
+          },
+          body: JSON.stringify({ newKey }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "更新密钥失败");
+        }
+        adminKeyInput.value = newKey;
+        confirmAdminKeyInput.value = newKey;
+        newAdminKeyInput.value = "";
+        confirmNewAdminKeyInput.value = "";
+        localStorage.setItem(KEY_STORAGE_KEY, newKey);
+        keyStatus.textContent = "管理员密钥更新成功。";
+        log("管理员密钥更新成功。");
+      } catch (error) {
+        log(`管理员密钥更新失败：${error.message}`);
+        alert(`管理员密钥更新失败：${error.message}`);
+      }
+    });
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -283,14 +600,17 @@
         localStorage.setItem(KEY_STORAGE_KEY, adminKey);
         keyStatus.textContent = "管理员密钥校验成功。";
         log(`发布成功：${data.book.title}（${data.book.id}），章节 ${data.book.chapter_count}`);
+        notifyShelfChanged();
         refreshBooks();
       } catch (error) {
         log(`发布失败：${error.message}`);
       }
     });
 
-    prefillAdminKey();
-    refreshBooks();
+    (async () => {
+      await prefillAdminKey();
+      refreshBooks();
+    })();
 
     async function saveBook(bookId, payload) {
       const res = await fetch(`/api/admin/books/${encodeURIComponent(bookId)}`, {
@@ -381,6 +701,9 @@
         if (failed.length) {
           log(`失败明细：${failed.join("；")}`);
         }
+        if (success > 0) {
+          notifyShelfChanged();
+        }
         refreshBooks();
       } catch (error) {
         log(`批量删除失败：${error.message}`);
@@ -414,12 +737,14 @@
           const title = item.querySelector('input[data-field="title"]').value.trim();
           const category = item.querySelector('input[data-field="category"]').value.trim();
           const coverUrl = item.querySelector('input[data-field="coverUrl"]').value.trim();
+          const tasksText = item.querySelector('textarea[data-field="tasksText"]').value;
           if (!title) {
             alert("书名不能为空");
             return;
           }
-          await saveBook(bookId, { title, category, coverUrl });
+          await saveBook(bookId, { title, category, coverUrl, tasksText });
           log(`保存成功：${title}`);
+          notifyShelfChanged();
           refreshBooks();
           return;
         }
@@ -432,6 +757,7 @@
           await deleteBook(bookId, confirmKey);
           selectedBookIds.delete(bookId);
           log(`删除成功：${bookId}`);
+          notifyShelfChanged();
           refreshBooks();
           return;
         }
@@ -445,6 +771,7 @@
           [ids[index], ids[target]] = [ids[target], ids[index]];
           await reorderBooks(ids);
           log(`排序已更新：${bookId}`);
+          notifyShelfChanged();
           refreshBooks();
         }
       } catch (error) {

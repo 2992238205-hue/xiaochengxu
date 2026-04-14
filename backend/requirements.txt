@@ -1,1 +1,7 @@
 flask==3.0.3
+alibabacloud_dysmsapi20170525
+alibabacloud_tea_openapi
+faster-whisper>=1.1.0,<2
+imageio-ffmpeg>=0.6.0,<1
+openpyxl>=3.1,<4
+playwright>=1.40,<2

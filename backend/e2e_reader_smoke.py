@@ -326,7 +326,57 @@ def main() -> int:
             report["metrics"]["shelf_book_button_count"] = int(count)
             if count <= 0:
                 raise RuntimeError("No books found on shelf (button[data-open-book] not present).")
-            open_buttons.nth(0).click()
+
+            chosen = page.evaluate(
+                """() => {
+  const books = Array.isArray(state.books) ? state.books : [];
+  let pick = books.find(b => Array.isArray(b.chapters) && b.chapters.length >= 2) || null;
+  if (!pick) {
+    // Inject a deterministic 2-chapter demo book so we can always test chapter navigation.
+    const demo = {
+      id: "e2e-demo-book",
+      title: "E2E Demo Book (2 Chapters)",
+      description: "仅用于自动化冒烟测试，不会上传到服务器。",
+      wordGoal: 100,
+      coverUrl: "",
+      category: "E2E",
+      sortOrder: -999,
+      ownership: "public",
+      editable: false,
+      chapters: [
+	        {
+	          title: "Chapter 1: Hello",
+	          english: "Hello reader. This is chapter one. It is short but different from chapter two. We will test the next chapter button.",
+	          chinese: "你好读者。这是第一章。我们将测试下一章按钮。",
+	          targetWords: []
+	        },
+	        {
+	          title: "Chapter 2: Different",
+	          english: "Now you are in chapter two. The content must change when switching chapters. If this text appears, the bug is fixed.",
+	          chinese: "现在你在第二章。切换章节时内容必须改变。",
+	          targetWords: []
+	        }
+      ]
+    };
+    books.unshift(demo);
+    state.books = books;
+    ensureProgress(demo.id);
+    // Start from chapter 1 (index 0). The "next chapter" action should unlock chapter 2.
+    state.progressByBook[demo.id].unlockedChapter = 0;
+    state.progressByBook[demo.id].passedChapters["0"] = true;
+    state.progressByBook[demo.id].passedChapters["1"] = true;
+    saveState();
+    renderShelf();
+    pick = demo;
+  }
+  return {ok:true, id: pick.id, title: pick.title || '', chapterCount: (pick.chapters || []).length};
+}"""
+            )
+            if not isinstance(chosen, dict) or not chosen.get("ok") or not chosen.get("id"):
+                raise RuntimeError(f"Cannot pick a book: {chosen}")
+            report["metrics"]["chosen_book"] = chosen
+
+            page.locator(f'button[data-open-book="{chosen["id"]}"]').click()
 
             # reader-view is a wrapper whose only child is position:fixed; the wrapper may have 0 height,
             # so it is not considered "visible" by Playwright. Wait for the fixed stage/panel instead.
@@ -361,6 +411,40 @@ def main() -> int:
             fatal_tokens = ["&quot;", "&amp;quot;"]
             warn_tokens = ["**", "__", "~~", "`", "Scene Setting:", "The Story:", "版本A", "版本B"]
 
+            def sample_fill(label: str) -> Dict[str, Any]:
+                """
+                Estimate how "full" the current page is (used height / capacity).
+                We want to catch regressions where each page ends too early with a big blank area.
+                """
+                data = page.evaluate(
+                    """() => {
+  const panel = document.getElementById('reading-panel');
+  if (!panel) return null;
+  const panelWidth = panel.clientWidth || 1;
+  const pageIndex = Math.max(0, Math.round((panel.scrollLeft || 0) / panelWidth));
+  const frame = panel.querySelector(`.page-frame[data-page-index="${pageIndex}"]`);
+  const content = frame ? frame.querySelector('.page-content') : null;
+  if (!content) return {pageIndex, ok:false};
+  const contentRect = content.getBoundingClientRect();
+  const paras = [...content.querySelectorAll('p.paragraph')].filter(p => (p.textContent || '').trim());
+  const last = paras.length > 0 ? paras[paras.length - 1] : null;
+  const lastBottom = last ? last.getBoundingClientRect().bottom : contentRect.top;
+  const used = Math.max(0, Math.min(contentRect.height, lastBottom - contentRect.top));
+  const cap = Math.max(1, contentRect.height);
+  return {pageIndex, ok:true, usedPx: used, capPx: cap, ratio: used / cap, paraCount: paras.length};
+}"""
+                )
+                payload: Dict[str, Any] = {
+                    "label": label,
+                    "pageIndex": None,
+                    "ok": False,
+                    "ratio": None,
+                }
+                if isinstance(data, dict):
+                    payload.update(data)
+                report.setdefault("metrics", {}).setdefault("fill_samples", []).append(payload)
+                return payload
+
             def scan_tokens(label: str) -> Dict[str, Any]:
                 text_blob = page.evaluate(
                     """() => {
@@ -384,6 +468,7 @@ def main() -> int:
                 )
                 return {"fatal": found_fatal, "warn": found_warn}
 
+            sample_fill("reader_initial")
             initial_scan = scan_tokens("reader_initial")
             if initial_scan["fatal"]:
                 report["steps"].append(
@@ -416,6 +501,7 @@ def main() -> int:
                 shot = shots_dir / f"03_reader_next_{i+1}.png"
                 page.screenshot(path=str(shot), full_page=True)
                 report["screenshots"].append({"label": f"翻页+{i+1}", "path": str(shot)})
+                sample_fill(f"reader_after_turn_{i+1}")
                 scan_tokens(f"reader_after_turn_{i+1}")
 
             report["steps"].append({"name": "翻页", "ok": True, "detail": f"turns={args.turns}"})
@@ -438,6 +524,129 @@ def main() -> int:
 
             report["steps"].append({"name": "UI与按钮翻页", "ok": True, "detail": "toggle + next-page"})
 
+            # Step 5: exercise reader controls (Chinese toggle / night mode / theme / sliders).
+            try:
+                # Ensure UI is visible for controls (avoid relying on a second toggle tap).
+                page.evaluate("() => { try { setReaderUiVisible(true); } catch (e) {} }")
+                time.sleep(0.25)
+
+                # Toggle Chinese panel.
+                with contextlib.suppress(Exception):
+                    page.locator("#show-chinese").check(timeout=1500)
+                    time.sleep(0.2)
+                    page.locator("#show-chinese").uncheck(timeout=1500)
+                    time.sleep(0.2)
+
+                # Toggle night mode.
+                with contextlib.suppress(Exception):
+                    page.locator("#night-mode").check(timeout=1500)
+                    time.sleep(0.2)
+                    page.locator("#night-mode").uncheck(timeout=1500)
+                    time.sleep(0.2)
+
+                # Switch theme.
+                with contextlib.suppress(Exception):
+                    page.locator("#reader-theme").select_option("green", timeout=1500)
+                    time.sleep(0.2)
+                    page.locator("#reader-theme").select_option("paper", timeout=1500)
+                    time.sleep(0.2)
+
+                # Adjust font size / line height.
+                def set_range_input(input_id: str, value: str) -> None:
+                    page.evaluate(
+                        """([id, value]) => {
+  const el = document.getElementById(id);
+  if (!el) throw new Error('missing ' + id);
+  el.value = String(value);
+  el.dispatchEvent(new Event('input', {bubbles: true}));
+  el.dispatchEvent(new Event('change', {bubbles: true}));
+}""",
+                        [input_id, value],
+                    )
+
+                with contextlib.suppress(Exception):
+                    set_range_input("font-size", "22")
+                    time.sleep(0.2)
+                    set_range_input("line-height", "1.8")
+                    time.sleep(0.2)
+                    set_range_input("font-size", "20")
+                    set_range_input("line-height", "1.7")
+                    time.sleep(0.2)
+
+                report["steps"].append({"name": "阅读设置控件", "ok": True, "detail": "toggle + theme + sliders"})
+            except Exception as exc:
+                report["steps"].append({"name": "阅读设置控件", "ok": False, "detail": _truncate(str(exc))})
+
+            # Step 6: Chapter navigation regression check.
+            # Symptom we want to prevent: chapter title changes but reading content does not.
+            try:
+                # Unlock at least 2 chapters and mark current as passed to bypass the quiz gate.
+                nav_meta = page.evaluate(
+                    """() => {
+  const book = state.books.find(b => b.id === state.activeBookId) || state.books[0];
+  if (!book) return {ok:false, reason:'no book'};
+  ensureProgress(book.id);
+  const progress = state.progressByBook[book.id];
+  progress.unlockedChapter = Math.max(progress.unlockedChapter || 0, Math.min(2, book.chapters.length - 1));
+  progress.passedChapters[String(state.activeChapterIndex || 0)] = true;
+  saveState();
+  renderReader();
+  return {ok:true, chapterCount: book.chapters.length, unlocked: progress.unlockedChapter, active: state.activeChapterIndex};
+}"""
+                )
+                if not isinstance(nav_meta, dict) or not nav_meta.get("ok"):
+                    raise RuntimeError(f"unlock failed: {nav_meta}")
+                if int(nav_meta.get("chapterCount") or 0) < 2:
+                    report["steps"].append({"name": "章节切换", "ok": True, "detail": "chapterCount<2 (skip)"})
+                else:
+                    before = page.evaluate(
+                        """() => ({
+  chapterIndex: state.activeChapterIndex,
+  title: document.getElementById('reader-chapter-title')?.textContent || '',
+  sample: (document.getElementById('reading-panel')?.innerText || '').slice(0, 260)
+})"""
+                    )
+                    page.locator("#next-chapter").click(timeout=1500)
+                    page.wait_for_function(
+                        "prev => state.activeChapterIndex === (prev + 1)",
+                        arg=int(before.get("chapterIndex") or 0),
+                        timeout=args.timeout * 1000,
+                    )
+                    time.sleep(0.35)
+                    after = page.evaluate(
+                        """() => ({
+  chapterIndex: state.activeChapterIndex,
+  title: document.getElementById('reader-chapter-title')?.textContent || '',
+  sample: (document.getElementById('reading-panel')?.innerText || '').slice(0, 260)
+})"""
+                    )
+
+                    title_changed = str(after.get("title") or "") != str(before.get("title") or "")
+                    content_changed = str(after.get("sample") or "") != str(before.get("sample") or "")
+                    ok = bool(title_changed and content_changed)
+                    detail = f"title_changed={title_changed} content_changed={content_changed}"
+                    report["steps"].append({"name": "章节切换", "ok": ok, "detail": detail})
+
+                    # Go back to previous chapter (best effort).
+                    with contextlib.suppress(Exception):
+                        page.locator("#prev-chapter").click(timeout=1500)
+                        time.sleep(0.25)
+            except Exception as exc:
+                report["steps"].append({"name": "章节切换", "ok": False, "detail": _truncate(str(exc))})
+
+            # Step 7: Switch tabs (shelf/profile) and return.
+            try:
+                # Reader view is immersive and can cover the top tabs; go back to shelf first.
+                page.locator("#reader-back").click(timeout=1500)
+                page.wait_for_selector("#shelf-view.active", timeout=args.timeout * 1000)
+                page.locator('[data-view="profile"]').click(timeout=1500)
+                page.wait_for_selector("#profile-view.active", timeout=args.timeout * 1000)
+                page.locator('[data-view="shelf"]').click(timeout=1500)
+                page.wait_for_selector("#shelf-view.active", timeout=args.timeout * 1000)
+                report["steps"].append({"name": "切换Tab", "ok": True, "detail": "profile->shelf"})
+            except Exception as exc:
+                report["steps"].append({"name": "切换Tab", "ok": False, "detail": _truncate(str(exc))})
+
             # Final: collect errors and close.
             report["errors"]["console"] = console_errors
             report["errors"]["page"] = page_errors
@@ -450,7 +659,9 @@ def main() -> int:
         fatal_found = any(bool(item.get("fatal")) for item in scans)
         has_fatal = len(report["errors"]["page"]) > 0
         has_console_err = len(report["errors"]["console"]) > 0
-        if has_fatal or fatal_found:
+        steps = report.get("steps") or []
+        has_failed_step = any(step.get("ok") is False for step in steps)
+        if has_fatal or fatal_found or has_failed_step:
             report["status"] = "FAIL"
         else:
             report["status"] = "OK_WITH_WARNINGS" if has_console_err else "OK"

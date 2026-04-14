@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>深瞳阅读 — 视频转写后台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f8fc;
+      --panel: #ffffff;
+      --ink: #1a1f2e;
+      --muted: #6b7a90;
+      --line: #e2e8f2;
+      --accent: #4f6ef7;
+      --accent-2: #3b55d9;
+      --danger: #dc2626;
+      --danger-soft: rgba(220, 38, 38, 0.06);
+      --radius-sm: 10px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 16px rgba(18, 31, 53, 0.06), 0 1px 3px rgba(0,0,0,0.03);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Inter", -apple-system, "PingFang SC", sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 600px 400px at 10% 0%, rgba(79,110,247,0.05), transparent),
+        radial-gradient(ellipse 500px 300px at 90% 10%, rgba(168,130,255,0.04), transparent);
+      pointer-events: none;
+    }
+    .wrap { width: min(1060px, 96%); margin: 24px auto 60px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
+      transition: box-shadow 200ms ease;
+    }
+    .card:hover { box-shadow: 0 8px 28px rgba(18,31,53,0.08); }
+    h1 {
+      margin: 0 0 8px; font-size: 1.4rem; font-weight: 700;
+      background: linear-gradient(135deg, #2a3a5c, #4f6ef7);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    h2 {
+      margin: 0 0 14px; font-size: 1.1rem; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+    }
+    h2::before {
+      content: ''; width: 4px; height: 18px;
+      background: linear-gradient(180deg, var(--accent), #7c5cfc);
+      border-radius: 999px; flex-shrink: 0;
+    }
+    label { display: block; margin-bottom: 12px; font-size: .88rem; color: var(--muted); font-weight: 500; }
+    input, textarea, button, select { font: inherit; }
+    input[type="text"], input[type="password"], textarea, select {
+      width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm);
+      padding: 10px 12px; background: #fff; font-size: 0.92rem;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79,110,247,0.15);
+    }
+    textarea { min-height: 130px; resize: vertical; line-height: 1.6; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn {
+      border: none; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff; border-radius: var(--radius-sm); padding: 10px 18px;
+      font-weight: 600; font-size: 0.92rem; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(79,110,247,0.25);
+      transition: all 180ms ease;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(79,110,247,0.35); }
+    .btn:active { transform: translateY(0); }
+    .hint { color: var(--muted); font-size: .86rem; line-height: 1.5; }
+    .log {
+      white-space: pre-wrap; background: #0f1420; color: #a8d8ea;
+      border-radius: var(--radius-md); padding: 16px; min-height: 90px;
+      font-size: .84rem; font-family: "SF Mono","Fira Code",monospace; line-height: 1.6;
+    }
+    .toolbar { display: flex; gap: 10px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+    .toolbar button {
+      padding: 9px 14px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+      background: var(--panel); color: var(--ink); font-weight: 600; font-size: 0.86rem;
+      cursor: pointer; transition: all 150ms ease;
+    }
+    .toolbar button:hover { background: #f0f3fa; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .table th, .table td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+    .table th { color: var(--muted); background: #fafbfd; font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.3px; }
+    .table tbody tr { transition: background 120ms ease; }
+    .table tbody tr:hover { background: rgba(79,110,247,0.03); }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .actions button {
+      padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--ink); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; transition: all 150ms ease;
+    }
+    .actions button:hover { background: #f0f3fa; transform: translateY(-1px); }
+    .actions button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .danger { border-color: rgba(220,38,38,0.3) !important; color: var(--danger) !important; background: var(--danger-soft) !important; }
+    .danger:hover { background: rgba(220,38,38,0.1) !important; }
+    .pill {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: 0.78rem; font-weight: 600; border: 1px solid var(--line);
+      background: #f5f8ff; color: #4a6296;
+    }
+    .pill-running { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2); color: #2563eb; }
+    .pill-succeeded { background: rgba(22,163,74,0.08); border-color: rgba(22,163,74,0.2); color: #16a34a; }
+    .pill-failed { background: rgba(220,38,38,0.06); border-color: rgba(220,38,38,0.15); color: #dc2626; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 999px; }
+    @media (max-width: 760px) { .row { grid-template-columns: 1fr; } .card { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>深瞳阅读 · 视频转写后台</h1>
+      <p class="hint">本页只处理视频/音频转文字。小说阅读后台在 <a href="/admin">/admin</a>。</p>
+      <p id="origin-tip" class="hint"></p>
+    </div>
+
+    <div class="card">
+      <h2>创建转写任务</h2>
+      <form id="transcribe-form">
+        <label>管理员密钥
+          <input id="admin-key" type="password" placeholder="部署时设置的 ADMIN_KEY" required>
+        </label>
+        <p id="key-status" class="hint"></p>
+        <label>视频/音频文件（可多选）
+          <input id="transcribe-files" type="file" accept=".mp4,.mov,.m4v,.avi,.mkv,.webm,.mp3,.wav,.m4a,.aac,.flac,.ogg,video/*,audio/*" multiple required>
+        </label>
+        <div class="row">
+          <label>音频语言
+            <select id="transcribe-language">
+              <option value="zh" selected>中文</option>
+              <option value="en">英文</option>
+              <option value="ja">日文</option>
+              <option value="ko">韩文</option>
+            </select>
+          </label>
+          <label>术语词表（可选）
+            <textarea id="transcribe-term-text" placeholder="每行一个词条：原词|标准词&#10;例如：&#10;大模型|大型语言模型&#10;transformer|Transformer"></textarea>
+          </label>
+        </div>
+        <button class="btn" type="submit">创建转写任务</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>转写任务</h2>
+      <div class="toolbar">
+        <button id="refresh-jobs" type="button">刷新任务</button>
+        <span id="poll-tip" class="hint">自动刷新中</span>
+        <span id="provider-tip" class="hint"></span>
+      </div>
+      <div id="job-list" class="hint">暂无转写任务。</div>
+    </div>
+
+    <div class="card">
+      <h2>操作日志</h2>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+
+  <script>
+    const KEY_STORAGE_KEY = "reader_admin_key_v1";
+    const form = document.getElementById("transcribe-form");
+    const adminKeyInput = document.getElementById("admin-key");
+    const keyStatus = document.getElementById("key-status");
+    const filesInput = document.getElementById("transcribe-files");
+    const languageInput = document.getElementById("transcribe-language");
+    const termTextInput = document.getElementById("transcribe-term-text");
+    const refreshJobsButton = document.getElementById("refresh-jobs");
+    const jobList = document.getElementById("job-list");
+    const pollTip = document.getElementById("poll-tip");
+    const providerTip = document.getElementById("provider-tip");
+    const logEl = document.getElementById("log");
+    const originTip = document.getElementById("origin-tip");
+    let pollTimer = null;
+    let providerMode = "";
+
+    function log(message) {
+      const time = new Date().toLocaleString();
+      logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function adminHeaders() {
+      const key = String(adminKeyInput.value || "").trim();
+      return key ? { "X-Admin-Key": key } : {};
+    }
+
+    function formatDateTime(raw) {
+      const text = String(raw || "").trim();
+      if (!text) return "-";
+      const date = new Date(text);
+      if (Number.isNaN(date.getTime())) return text;
+      return date.toLocaleString();
+    }
+
+    function renderStatus(status) {
+      const text = String(status || "").toLowerCase();
+      const labelMap = { queued: "排队中", running: "转写中", reviewing: "复核中", succeeded: "已完成", failed: "失败" };
+      const clsMap = { queued: "pill", running: "pill pill-running", reviewing: "pill pill-running", succeeded: "pill pill-succeeded", failed: "pill pill-failed" };
+      return `<span class="${clsMap[text] || "pill"}">${labelMap[text] || text || "未知"}</span>`;
+    }
+
+    function schedulePoll(hasActive) {
+      clearTimeout(pollTimer);
+      const delay = hasActive ? 3000 : 10000;
+      pollTip.textContent = hasActive ? "自动刷新中（每3秒）" : "自动刷新中（每10秒）";
+      pollTimer = setTimeout(() => refreshJobs(false), delay);
+    }
+
+    async function prefillAdminKey() {
+      const urlKey = new URLSearchParams(window.location.search).get("k");
+      if (urlKey) {
+        adminKeyInput.value = urlKey;
+        localStorage.setItem(KEY_STORAGE_KEY, urlKey);
+        keyStatus.textContent = "已从链接自动填入管理员密钥。";
+        return;
+      }
+      const saved = localStorage.getItem(KEY_STORAGE_KEY);
+      if (saved) {
+        adminKeyInput.value = saved;
+        keyStatus.textContent = "已使用上次成功的管理员密钥。";
+      }
+      try {
+        const res = await fetch("/api/admin/bootstrap", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.adminKey) {
+          adminKeyInput.value = String(data.adminKey);
+          localStorage.setItem(KEY_STORAGE_KEY, String(data.adminKey));
+          keyStatus.textContent = "本地服务已自动填入管理员密钥。";
+        }
+      } catch (_error) {
+        // ignore
+      }
+    }
+
+    async function verifyAdminKey() {
+      const key = String(adminKeyInput.value || "").trim();
+      if (!key) throw new Error("请先输入管理员密钥");
+      const res = await fetch("/api/admin/verify", { method: "POST", headers: { "X-Admin-Key": key } });
+      if (!res.ok) throw new Error("管理员密钥错误");
+      keyStatus.textContent = "管理员密钥校验成功。";
+      localStorage.setItem(KEY_STORAGE_KEY, key);
+    }
+
+    function renderJobs(jobs) {
+      if (!Array.isArray(jobs) || jobs.length === 0) {
+        jobList.innerHTML = "<p class='hint'>暂无转写任务。</p>";
+        return;
+      }
+      const rows = jobs.map((job) => {
+        const jobId = String(job.id || "");
+        const status = String(job.status || "").toLowerCase();
+        const disableDownload = job.outputReady ? "" : "disabled";
+        const cloudKimi = providerMode === "kimi";
+        const disableRetry = cloudKimi || ["queued", "running", "reviewing"].includes(status) ? "disabled" : "";
+        const disableDelete = ["running", "reviewing"].includes(status) ? "disabled" : "";
+        const note = String(job.errorMessage || job.providerNote || "").trim();
+        return `
+          <tr data-job-id="${escapeHtml(jobId)}">
+            <td>${escapeHtml(job.fileName || "-")}</td>
+            <td>${renderStatus(status)}</td>
+            <td>${Number(job.progress || 0).toFixed(1)}%</td>
+            <td>${Number(job.lowConfCount || 0)}</td>
+            <td>${escapeHtml(formatDateTime(job.updatedAt))}</td>
+            <td>${note ? escapeHtml(note) : "-"}</td>
+            <td>
+              <div class="actions">
+                <button type="button" data-action="download-md" ${disableDownload}>MD</button>
+                <button type="button" data-action="download-txt" ${disableDownload}>TXT</button>
+                <button type="button" data-action="download-srt" ${disableDownload}>SRT</button>
+                <button type="button" data-action="retry-low-conf" ${disableRetry}>低置信复核</button>
+                <button type="button" class="danger" data-action="delete-job" ${disableDelete}>删除</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      jobList.innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>文件</th>
+              <th>状态</th>
+              <th>进度</th>
+              <th>低置信</th>
+              <th>更新时间</th>
+              <th>备注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    async function refreshJobs(manual = true) {
+      try {
+        await verifyAdminKey();
+        const res = await fetch("/api/admin/transcription/jobs?limit=120", {
+          headers: adminHeaders(),
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "获取转写任务失败");
+        }
+        const provider = data.provider || {};
+        providerMode = String(provider.mode || "").toLowerCase();
+        providerTip.textContent = provider.label
+          ? `当前引擎：${provider.label}${provider.configured === false ? "（未配置）" : ""}`
+          : "";
+        const jobs = Array.isArray(data.items) ? data.items : [];
+        renderJobs(jobs);
+        const hasActive = jobs.some((job) => ["queued", "running", "reviewing"].includes(String(job.status || "").toLowerCase()));
+        schedulePoll(hasActive);
+        if (manual) log(`刷新成功，共 ${jobs.length} 条任务`);
+      } catch (error) {
+        jobList.innerHTML = `<p class='hint'>${escapeHtml(error.message || "获取转写任务失败")}</p>`;
+        schedulePoll(false);
+        if (manual) log(`刷新失败：${error.message}`);
+      }
+    }
+
+    async function downloadTranscription(jobId, format) {
+      await verifyAdminKey();
+      const res = await fetch(`/api/admin/transcription/jobs/${encodeURIComponent(jobId)}/download?format=${encodeURIComponent(format)}`, {
+        headers: adminHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "下载失败");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${jobId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const files = Array.from(filesInput.files || []);
+      if (files.length === 0) {
+        alert("请先选择视频/音频文件");
+        return;
+      }
+      if (files.length > 10) {
+        alert("单次最多上传 10 个文件");
+        return;
+      }
+      const key = String(adminKeyInput.value || "").trim();
+      if (!key) {
+        alert("请先输入管理员密钥");
+        return;
+      }
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+      formData.append("language", String(languageInput.value || "zh").trim());
+      formData.append("termText", String(termTextInput.value || ""));
+
+      try {
+        const res = await fetch("/api/admin/transcription/jobs/upload", {
+          method: "POST",
+          headers: { "X-Admin-Key": key },
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "创建转写任务失败");
+        }
+        localStorage.setItem(KEY_STORAGE_KEY, key);
+        keyStatus.textContent = "管理员密钥校验成功。";
+        if (data.provider && data.provider.label) {
+          providerMode = String(data.provider.mode || "").toLowerCase();
+          providerTip.textContent = `当前引擎：${data.provider.label}${data.provider.configured === false ? "（未配置）" : ""}`;
+        }
+        filesInput.value = "";
+        const count = Array.isArray(data.jobs) ? data.jobs.length : 0;
+        log(`转写任务创建成功：${count} 个文件已加入队列`);
+        refreshJobs(false);
+      } catch (error) {
+        log(`创建转写任务失败：${error.message}`);
+        alert(`创建转写任务失败：${error.message}`);
+      }
+    });
+
+    refreshJobsButton.addEventListener("click", () => refreshJobs(true));
+
+    jobList.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const row = button.closest("tr[data-job-id]");
+      if (!row) return;
+      const jobId = String(row.dataset.jobId || "");
+      if (!jobId) return;
+      const action = String(button.dataset.action || "");
+
+      try {
+        if (action === "download-md") return downloadTranscription(jobId, "md");
+        if (action === "download-txt") return downloadTranscription(jobId, "txt");
+        if (action === "download-srt") return downloadTranscription(jobId, "srt");
+
+        await verifyAdminKey();
+        if (action === "retry-low-conf") {
+          if (!confirm("确认仅对低置信片段执行阿里云复核？")) return;
+          const res = await fetch(`/api/admin/transcription/jobs/${encodeURIComponent(jobId)}/retry-low-confidence`, {
+            method: "POST",
+            headers: adminHeaders(),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "复核失败");
+          log(`低置信复核完成：${jobId}（复核 ${data.reviewed}，更新 ${data.updated}）`);
+          return refreshJobs(false);
+        }
+
+        if (action === "delete-job") {
+          if (!confirm("确认删除该转写任务及其产物？")) return;
+          const res = await fetch(`/api/admin/transcription/jobs/${encodeURIComponent(jobId)}`, {
+            method: "DELETE",
+            headers: adminHeaders(),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data.error || "删除任务失败");
+          log(`转写任务已删除：${jobId}`);
+          return refreshJobs(false);
+        }
+      } catch (error) {
+        log(`操作失败：${error.message}`);
+        alert(`操作失败：${error.message}`);
+      }
+    });
+
+    if (originTip) {
+      originTip.textContent = `当前后台地址：${window.location.origin}`;
+    }
+
+    (async () => {
+      await prefillAdminKey();
+      refreshJobs(false);
+    })();
+  </script>
+</body>
+</html>

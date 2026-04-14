@@ -5,7 +5,7 @@ __pycache__/
 .DS_Store
 .codex-runs/
 backend/.admin_key
-english_story_lab/story_lab.db
 content/user_covers/
 reports/
 backend/reports/
+.docx_compare_*

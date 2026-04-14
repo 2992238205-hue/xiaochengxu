@@ -1523,6 +1523,32 @@ function measurePageFits(paragraphs) {
   return pageMeasureContent.scrollHeight <= pageMeasureContent.clientHeight + 1;
 }
 
+function shouldSplitByChars(paragraph) {
+  const text = String(paragraph || "");
+  if (!text.trim()) {
+    return false;
+  }
+  // CJK paragraphs often contain a few spaces (e.g. around parentheses),
+  // but those spaces are not reliable word boundaries. Use char-based splitting
+  // when the paragraph is mostly CJK so we can fill pages more smoothly.
+  if (!/\s/.test(text)) {
+    return true;
+  }
+  const cjkCount = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  if (cjkCount <= 0) {
+    return false;
+  }
+  const latinCount = (text.match(/[A-Za-z]/g) || []).length;
+  if (cjkCount > latinCount * 2) {
+    return true;
+  }
+  const longRun = text.match(/[\u4e00-\u9fff]{8,}/g);
+  if (longRun && longRun.join("").length >= 32) {
+    return true;
+  }
+  return false;
+}
+
 function splitParagraphByMeasure(paragraph) {
   const text = String(paragraph || "").trim();
   if (!text) {
@@ -1530,8 +1556,9 @@ function splitParagraphByMeasure(paragraph) {
   }
   const segments = [];
   const hasWhitespace = /\s/.test(text);
+  const useChars = shouldSplitByChars(text);
 
-  if (hasWhitespace) {
+  if (hasWhitespace && !useChars) {
     const words = text.split(/\s+/).filter(Boolean);
     let start = 0;
     while (start < words.length) {
@@ -1594,7 +1621,8 @@ function splitParagraphByMeasureWithPrefix(prefixParas, paragraph) {
   }
 
   const hasWhitespace = /\s/.test(text);
-  if (hasWhitespace) {
+  const useChars = shouldSplitByChars(text);
+  if (hasWhitespace && !useChars) {
     const words = text.split(/\s+/).filter(Boolean);
     if (words.length === 0) {
       return null;
@@ -1731,9 +1759,14 @@ function paginateChapterByMeasure(text) {
 function paginateChapter(text, fontSize, lineHeight) {
   // Prefer real viewport pagination when reader view is visible; fallback to char-based splits.
   if (isViewActive("reader")) {
-    const measured = paginateChapterByMeasure(text);
-    if (Array.isArray(measured) && measured.length > 0) {
-      return measured;
+    try {
+      const measured = paginateChapterByMeasure(text);
+      if (Array.isArray(measured) && measured.length > 0) {
+        return measured;
+      }
+    } catch (err) {
+      // Keep reader stable even if measured pagination crashes in some webviews.
+      console.error("paginateChapterByMeasure failed; falling back to char pagination.", err);
     }
   }
   return paginateChapterByChars(String(text || ""), fontSize, lineHeight);

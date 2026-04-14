@@ -9,24 +9,29 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <link rel="icon" href="data:,">
-  <title>英语小说阅读 MVP</title>
+  <title>深瞳阅读 — 英语小说无障碍阅读</title>
   <!-- NOTE: bump version when deploying to avoid stale caches -->
-  <link rel="stylesheet" href="./styles.css?v=20260214-3">
+  <link rel="stylesheet" href="./styles.css?v=20260402-1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="app-shell">
     <header class="top-nav">
       <div class="brand">
-        <h1>英语小说阅读</h1>
-        <p>最小 MVP 验证版</p>
+        <div class="brand-logo">ST</div>
+        <div>
+          <h1>深瞳阅读</h1>
+          <p>点词即译 · 无障碍英语阅读</p>
+        </div>
       </div>
-      <div id="auth-mini" class="hint">未登录</div>
+      <div id="auth-mini" class="auth-pill">未登录</div>
     </header>
 
     <nav class="tabs">
       <button data-view="shelf" class="tab-button active">书架</button>
       <button data-view="reader" class="tab-button">阅读</button>
-      <button data-view="generator" class="tab-button">生成器</button>
       <button data-view="profile" class="tab-button">我的</button>
     </nav>
 
@@ -268,7 +273,7 @@
     </div>
   </dialog>
 
-  <script src="./config.js?v=20260214-3"></script>
-  <script src="./app.js?v=20260214-3" defer></script>
+  <script src="./config.js?v=20260402-1"></script>
+  <script src="./app.js?v=20260402-1" defer></script>
 </body>
 </html>

@@ -3,6 +3,10 @@ set -euo pipefail
 
 REQUESTED_PORT="${1:-5090}"
 PORT="${REQUESTED_PORT}"
+KEY_FILE="/Users/yuanxi/Documents/New project/backend/.admin_key"
+if [[ -z "${ADMIN_KEY:-}" && -f "${KEY_FILE}" ]]; then
+  ADMIN_KEY="$(cat "${KEY_FILE}" | tr -d '\r\n')"
+fi
 ADMIN_KEY="${ADMIN_KEY:-change-this-admin-key}"
 ALLOW_ADMIN_BOOTSTRAP="${ALLOW_ADMIN_BOOTSTRAP:-1}"
 export ADMIN_KEY
@@ -32,10 +36,11 @@ if [[ -z "$IP" ]]; then
   IP="127.0.0.1"
 fi
 
-echo "Reader URL : http://${IP}:${PORT}/"
+echo "Reader URL : http://${IP}:${PORT}/reader"
+echo "Generator  : http://${IP}:${PORT}/generator"
 echo "Admin URL  : http://${IP}:${PORT}/admin"
 echo "Admin key  : ${ADMIN_KEY}"
 echo "注意：必须带端口号（:${PORT}），否则可能出现 403。"
 echo "(Keep this terminal running)"
 
-"${VENV_DIR}/bin/python" backend/server.py
+"${VENV_DIR}/bin/python" backend/unified_server.py
